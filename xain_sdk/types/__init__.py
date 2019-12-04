@@ -1,3 +1,5 @@
+"""Provides types for the package"""
+
 from typing import Dict, List, Tuple
 
 from numpy import ndarray

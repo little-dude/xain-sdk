@@ -52,7 +52,9 @@ class Participant(ABCParticipant):
         )(inputs=hidden_layer)
         self.model: Model = Model(inputs=[input_layer], outputs=[output_layer])
         self.model.compile(
-            optimizer="Adam", loss="categorical_crossentropy", metrics=["categorical_accuracy"]
+            optimizer="Adam",
+            loss="categorical_crossentropy",
+            metrics=["categorical_accuracy"],
         )
 
         # define or load data to be trained on

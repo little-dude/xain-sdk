@@ -74,13 +74,13 @@ install_requires = [
 
 dev_require = [
     "grpcio-tools~=1.23",  # Apache License 2.0
-    "black==19.3b0",  # MIT
-    "mypy==0.720",  # MIT License
+    "black==19.10b0",  # MIT
+    "mypy==0.740",  # MIT License
     "pylint==2.3.1",  # GPL
     "astroid<=2.2.5",  # LGPL
     "isort==4.3.20",  # MIT
     "pip-licenses==1.15.2",  # MIT License
-    "mypy-protobuf==1.15",  # Apache License 2.0
+    "mypy-protobuf==1.16",  # Apache License 2.0
     "twine==2.0.0",  # Apache License 2.0
     "wheel==0.33.6",  # MIT
 ]
@@ -136,10 +136,7 @@ setup(
         "test": tests_require,
         "docs": docs_require,
         "examples": examples_require,
-        "dev": dev_require
-        + tests_require
-        + docs_require
-        + examples_require,
+        "dev": dev_require + tests_require + docs_require + examples_require,
     },
     cmdclass={"develop": CustomDevelopCommand},
 )

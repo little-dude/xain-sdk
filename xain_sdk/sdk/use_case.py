@@ -7,7 +7,10 @@ from numpy import ndarray
 
 
 class UseCase(ABC):
+    """An abstract base class which provides an interface to the participant runner."""
+
     def __init__(self, model):
+        """Init method"""
         self.model = model
 
     @abstractmethod

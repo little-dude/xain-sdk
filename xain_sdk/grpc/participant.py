@@ -25,7 +25,7 @@ class ParState(Enum):
     DONE = auto()
 
 
-def rendezvous(channel):
+def rendezvous(channel) -> None:
     """Starts a rendezvous exchange with Coordinator.
 
     Args:

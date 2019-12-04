@@ -7,8 +7,8 @@ from xain_sdk.sdk.use_case import UseCase
 @pytest.mark.xfail
 def test_start():
     class MyUseCase(UseCase):
-        def __init__(self, model, *args, **kwargs):
-            super().__init__(model, *args, **kwargs)
+        def __init__(self, model):
+            super().__init__(model)
             self.model = model
 
         def set_weights(self, weights):
