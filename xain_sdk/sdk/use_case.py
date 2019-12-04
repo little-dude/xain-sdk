@@ -1,7 +1,7 @@
-"""Provides abstract base class use_case which provides an interface to the
-participant runner"""
+"""Provides abstract base class use_case which provides an interface to the participant runner."""
+
 from abc import ABC, abstractmethod
-from typing import List
+from typing import Any, List
 
 from numpy import ndarray
 
@@ -9,7 +9,7 @@ from numpy import ndarray
 class UseCase(ABC):
     """An abstract base class which provides an interface to the participant runner."""
 
-    def __init__(self, model):
+    def __init__(self, model: Any) -> None:
         """Init method"""
         self.model = model
 
@@ -35,7 +35,7 @@ class UseCase(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def train(self):
+    def train(self) -> None:
         """Will be called by the runner to start the training of the model. The
         implementation should run the training when called and before returning
         from the method persist the weights so that in a subsequent get_weights

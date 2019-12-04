@@ -9,6 +9,7 @@ import grpc
 from numproto import ndarray_to_proto, proto_to_ndarray
 
 from xain_sdk.grpc import coordinator_pb2, coordinator_pb2_grpc
+from xain_sdk.sdk.participant import Participant
 from xain_sdk.types import History, Metrics, Theta
 
 RETRY_TIMEOUT = 5
@@ -25,7 +26,7 @@ class ParState(Enum):
     DONE = auto()
 
 
-def rendezvous(channel) -> None:
+def rendezvous(channel: grpc.Channel) -> None:
     """Starts a rendezvous exchange with Coordinator.
 
     Args:
@@ -46,7 +47,7 @@ def rendezvous(channel) -> None:
         response = reply.response
 
 
-def start_training(channel) -> Tuple[Theta, int, int]:
+def start_training(channel: grpc.Channel) -> Tuple[Theta, int, int]:
     """Starts a training initiation exchange with Coordinator. Returns the decoded
     contents of the response from Coordinator.
 
@@ -68,8 +69,8 @@ def start_training(channel) -> Tuple[Theta, int, int]:
 
 
 def end_training(
-    channel, theta_n: Tuple[Theta, int], history: History, metrics: Metrics
-):
+    channel: grpc.Channel, theta_n: Tuple[Theta, int], history: History, metrics: Metrics
+) -> None:
     """Starts a training completion exchange with Coordinator, sending a locally
     trained model and metadata.
 
@@ -86,23 +87,22 @@ def end_training(
         theta_prime=[ndarray_to_proto(nda) for nda in theta], num_examples=num
     )
     # history data
-    h = {
-        k: coordinator_pb2.EndTrainingRequest.HistoryValue(values=v)
-        for k, v in history.items()
+    h = {  # pylint: disable=invalid-name
+        k: coordinator_pb2.EndTrainingRequest.HistoryValue(values=v) for k, v in history.items()
     }
     # metrics
     cid, vbc = metrics
-    m = coordinator_pb2.EndTrainingRequest.Metrics(cid=cid, vol_by_class=vbc)
-    # assemble req
-    req = coordinator_pb2.EndTrainingRequest(
-        theta_update=theta_n_proto, history=h, metrics=m
+    m = coordinator_pb2.EndTrainingRequest.Metrics(  # pylint: disable=invalid-name
+        cid=cid, vol_by_class=vbc
     )
+    # assemble req
+    req = coordinator_pb2.EndTrainingRequest(theta_update=theta_n_proto, history=h, metrics=m)
     # send request to end training
     reply = stub.EndTraining(req)
     print(f"Participant received: {type(reply)}")
 
 
-def training_round(channel, participant):
+def training_round(channel: grpc.Channel, participant: Participant) -> None:
     """Initiates training round exchange with Coordinator.
 
     Begins with `start_training`. Then performs local training computation using
@@ -125,12 +125,12 @@ class StateRecord:
     """
 
     # pylint: disable=W0622
-    def __init__(self, state=ParState.WAITING_FOR_SELECTION, round=0):
-        self.cv = threading.Condition()
+    def __init__(self, state: ParState = ParState.WAITING_FOR_SELECTION, round: int = 0) -> None:
+        self.cv = threading.Condition()  # pylint: disable=invalid-name
         self.round = round
         self.state = state
 
-    def lookup(self):
+    def lookup(self) -> Tuple[ParState, int]:
         """Looks up the state and round number.
 
         Returns:
@@ -139,7 +139,7 @@ class StateRecord:
         with self.cv:
             return self.state, self.round
 
-    def update(self, state):
+    def update(self, state: ParState) -> None:
         """Updates state.
 
         Args:
@@ -149,7 +149,7 @@ class StateRecord:
             self.state = state
             self.cv.notify()
 
-    def wait_until_selected_or_done(self):
+    def wait_until_selected_or_done(self) -> ParState:
         """Waits until Participant is in the state of having been selected for training
         (or is completely done).
 
@@ -161,7 +161,7 @@ class StateRecord:
             # which one was it?
             return self.state
 
-    def wait_until_next_round(self):
+    def wait_until_next_round(self) -> ParState:
         """Waits until Participant is in a state indicating the start of the next round
         of training.
 
@@ -177,7 +177,9 @@ class StateRecord:
             return self.state
 
 
-def transit(st, beat_reply):
+def transit(  # pylint: disable=invalid-name
+    st: StateRecord, beat_reply: coordinator_pb2.HeartbeatReply
+) -> None:
     """Participant state transition function on a heartbeat response. Updates the
     state record `st`.
 
@@ -185,7 +187,7 @@ def transit(st, beat_reply):
         st (obj:`StateRecord`): Participant state record to update.
         beat_reply (obj:`coordinator_pb2.HeartbeatReply`): Heartbeat from Coordinator.
     """
-    msg, r = beat_reply.state, beat_reply.round
+    msg, r = beat_reply.state, beat_reply.round  # pylint: disable=invalid-name
     with st.cv:
         if st.state == ParState.WAITING_FOR_SELECTION:
             if msg == coordinator_pb2.State.ROUND:
@@ -210,7 +212,9 @@ def transit(st, beat_reply):
                 st.cv.notify()
 
 
-def message_loop(chan, st, terminate):
+def message_loop(  # pylint: disable=invalid-name
+    chan: grpc.Channel, st: StateRecord, terminate: threading.Event
+) -> None:
     """Periodically sends (and handles) heartbeat messages in a loop.
 
     Args:
@@ -226,7 +230,7 @@ def message_loop(chan, st, terminate):
         time.sleep(HEARTBEAT_TIME)
 
 
-def go(part):
+def go(part: Participant) -> None:  # pylint: disable=invalid-name
     """Top-level function for the Participant state machine.
 
     After rendezvous and heartbeat initiation, the Participant is
@@ -241,9 +245,11 @@ def go(part):
     with grpc.insecure_channel("localhost:50051") as chan:  # thread-safe
         rendezvous(chan)
 
-        st = StateRecord()
+        st = StateRecord()  # pylint: disable=invalid-name
         terminate = threading.Event()
-        ml = threading.Thread(target=message_loop, args=(chan, st, terminate))
+        ml = threading.Thread(  # pylint: disable=invalid-name
+            target=message_loop, args=(chan, st, terminate)
+        )
         ml.start()
 
         # in WAITING_FOR_SELECTION state
@@ -255,7 +261,9 @@ def go(part):
         ml.join()
 
 
-def begin_selection_wait(st, chan, part):
+def begin_selection_wait(  # pylint: disable=invalid-name
+    st: StateRecord, chan: grpc.Channel, part: Participant
+) -> None:
     """Perform actions in Participant state WAITING_FOR_SELECTION.
 
     Args:
@@ -271,7 +279,9 @@ def begin_selection_wait(st, chan, part):
         pass
 
 
-def begin_training(st, chan, part):
+def begin_training(  # pylint: disable=invalid-name
+    st: StateRecord, chan: grpc.Channel, part: Participant
+) -> None:
     """Perform actions in Participant state TRAINING and POST_TRAINING.
 
     Args:
@@ -283,7 +293,7 @@ def begin_training(st, chan, part):
     training_round(chan, part)
     # move to POST_TRAINING state
     st.update(ParState.POST_TRAINING)
-    ps = st.wait_until_next_round()
+    ps = st.wait_until_next_round()  # pylint: disable=invalid-name
     if ps == ParState.TRAINING:
         # selected again
         begin_training(st, chan, part)

@@ -1,7 +1,7 @@
 """Provides coordinator API"""
 
 
-def start():
+def start() -> None:
     """Starts a coordinator
 
     TODO: provide through console scripts

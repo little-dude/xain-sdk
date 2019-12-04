@@ -10,6 +10,16 @@ Welcome to XAIN-SDK's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+Examples
+--------
+
+.. toctree::
+    :maxdepth: 1
+    :glob:
+
+
+    examples/**
+
 API Documentation
 -----------------
 

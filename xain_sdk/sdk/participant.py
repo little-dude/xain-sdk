@@ -8,7 +8,7 @@ import numpy as np
 from xain_sdk.sdk.use_case import UseCase
 
 
-def start(coordinator_url: str, use_case: UseCase):
+def start(coordinator_url: str, use_case: UseCase) -> None:
     """Starts a participant which will connect to coordinator_url and
     work on use_case
 
