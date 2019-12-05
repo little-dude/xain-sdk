@@ -28,7 +28,12 @@ author = "XAIN Contributors"
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ["recommonmark", "sphinx.ext.napoleon", "sphinx.ext.autodoc"]
+extensions = [
+    "recommonmark",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.intersphinx",
+]
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 
@@ -60,7 +65,8 @@ html_context = {
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
 
-# intersphinx configuration
+# -- Options for intersphinx -------------------------------------------------
+
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://docs.scipy.org/doc/numpy/", None),
@@ -68,6 +74,8 @@ intersphinx_mapping = {
 
 
 def run_apidoc(_):
+    exclude = ["../xain_sdk/**_pb2**"]
+
     argv = [
         "--doc-project",
         "Code Reference",
@@ -80,7 +88,7 @@ def run_apidoc(_):
         "-o",
         "./_code_reference/",
         "../xain_sdk/",
-    ]
+    ] + exclude
 
     from sphinx.ext import apidoc
 
@@ -89,4 +97,3 @@ def run_apidoc(_):
 
 def setup(app):
     app.connect("builder-inited", run_apidoc)
-

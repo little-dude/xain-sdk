@@ -1,4 +1,4 @@
-"""Sets environmental variables"""
+"""Provides xain package SDK"""
 
 import os
 

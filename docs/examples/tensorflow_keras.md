@@ -17,7 +17,7 @@ import numpy as np
 The SDK provides an abstact base class for `Participant`s which can be imported as
 
 ```python
-from xain_sdk.sdk.participant import Participant as ABCParticipant
+from xain_sdk.participant import Participant as ABCParticipant
 ```
 
 A custom `Participant` should inherit from the abstract base class, like
@@ -167,7 +167,7 @@ from tensorflow.data import Dataset
 from tensorflow.keras import Input, Model
 from tensorflow.keras.layers import Dense
 
-from xain_sdk.sdk.participant import Participant as ABCParticipant
+from xain_sdk.participant import Participant as ABCParticipant
 
 
 class Participant(ABCParticipant):

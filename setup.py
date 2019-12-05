@@ -71,7 +71,6 @@ install_requires = [
     "numproto~=0.3",  # Apache License 2.0
 ]
 
-
 dev_require = [
     "grpcio-tools~=1.23",  # Apache License 2.0
     "black==19.10b0",  # MIT
@@ -84,8 +83,6 @@ dev_require = [
     "twine==2.0.0",  # Apache License 2.0
     "wheel==0.33.6",  # MIT
 ]
-
-examples_require = ["tensorflow==1.14.0"]  # Apache 2.0
 
 tests_require = [
     "pytest==4.6.2",  # MIT license
@@ -135,8 +132,7 @@ setup(
     extras_require={
         "test": tests_require,
         "docs": docs_require,
-        "examples": examples_require,
-        "dev": dev_require + tests_require + docs_require + examples_require,
+        "dev": dev_require + tests_require + docs_require,
     },
     cmdclass={"develop": CustomDevelopCommand},
 )

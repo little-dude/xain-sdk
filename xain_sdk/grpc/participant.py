@@ -9,7 +9,7 @@ import grpc
 from numproto import ndarray_to_proto, proto_to_ndarray
 
 from xain_sdk.grpc import coordinator_pb2, coordinator_pb2_grpc
-from xain_sdk.sdk.participant import Participant
+from xain_sdk.participant import Participant
 from xain_sdk.types import History, Metrics, Theta
 
 RETRY_TIMEOUT = 5
@@ -69,7 +69,10 @@ def start_training(channel: grpc.Channel) -> Tuple[Theta, int, int]:
 
 
 def end_training(
-    channel: grpc.Channel, theta_n: Tuple[Theta, int], history: History, metrics: Metrics
+    channel: grpc.Channel,
+    theta_n: Tuple[Theta, int],
+    history: History,
+    metrics: Metrics,
 ) -> None:
     """Starts a training completion exchange with Coordinator, sending a locally
     trained model and metadata.
@@ -88,7 +91,8 @@ def end_training(
     )
     # history data
     h = {  # pylint: disable=invalid-name
-        k: coordinator_pb2.EndTrainingRequest.HistoryValue(values=v) for k, v in history.items()
+        k: coordinator_pb2.EndTrainingRequest.HistoryValue(values=v)
+        for k, v in history.items()
     }
     # metrics
     cid, vbc = metrics
@@ -96,7 +100,9 @@ def end_training(
         cid=cid, vol_by_class=vbc
     )
     # assemble req
-    req = coordinator_pb2.EndTrainingRequest(theta_update=theta_n_proto, history=h, metrics=m)
+    req = coordinator_pb2.EndTrainingRequest(
+        theta_update=theta_n_proto, history=h, metrics=m
+    )
     # send request to end training
     reply = stub.EndTraining(req)
     print(f"Participant received: {type(reply)}")
@@ -125,7 +131,9 @@ class StateRecord:
     """
 
     # pylint: disable=W0622
-    def __init__(self, state: ParState = ParState.WAITING_FOR_SELECTION, round: int = 0) -> None:
+    def __init__(
+        self, state: ParState = ParState.WAITING_FOR_SELECTION, round: int = 0
+    ) -> None:
         self.cv = threading.Condition()  # pylint: disable=invalid-name
         self.round = round
         self.state = state
@@ -230,7 +238,9 @@ def message_loop(  # pylint: disable=invalid-name
         time.sleep(HEARTBEAT_TIME)
 
 
-def go(part: Participant) -> None:  # pylint: disable=invalid-name
+def start_participant(
+    part: Participant, coordinator_url: str
+) -> None:  # pylint: disable=invalid-name
     """Top-level function for the Participant state machine.
 
     After rendezvous and heartbeat initiation, the Participant is
@@ -240,9 +250,10 @@ def go(part: Participant) -> None:  # pylint: disable=invalid-name
 
     Args:
         part (obj:`Participant`): Participant object for training computation.
+        coordinator_url (obj:`str`): The URL of the coordinator to connect to.
     """
     # use insecure channel for now
-    with grpc.insecure_channel("localhost:50051") as chan:  # thread-safe
+    with grpc.insecure_channel(target=coordinator_address) as chan:  # thread-safe
         rendezvous(chan)
 
         st = StateRecord()  # pylint: disable=invalid-name
