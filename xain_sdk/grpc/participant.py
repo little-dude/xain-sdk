@@ -253,7 +253,7 @@ def start_participant(
         coordinator_url (obj:`str`): The URL of the coordinator to connect to.
     """
     # use insecure channel for now
-    with grpc.insecure_channel(target=coordinator_address) as chan:  # thread-safe
+    with grpc.insecure_channel(target=coordinator_url) as chan:  # thread-safe
         rendezvous(chan)
 
         st = StateRecord()  # pylint: disable=invalid-name
