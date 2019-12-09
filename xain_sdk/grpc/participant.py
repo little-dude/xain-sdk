@@ -1,24 +1,25 @@
-"""Module implementing the networked Participant using gRPC.
-"""
+"""Module implementing the networked Participant using gRPC."""
+
 import threading
 import time
 from enum import Enum, auto
-from typing import Tuple
+from typing import Dict, List, Tuple
 
 import grpc
 from numproto import ndarray_to_proto, proto_to_ndarray
+from numpy import ndarray
 
-from xain_sdk.grpc import coordinator_pb2, coordinator_pb2_grpc
+from xain_sdk.grpc import coordinator_pb2
+from xain_sdk.grpc.coordinator_pb2 import EndTrainingRequest, StartTrainingRequest
+from xain_sdk.grpc.coordinator_pb2_grpc import CoordinatorStub
 from xain_sdk.participant import Participant
-from xain_sdk.types import History, Metrics, Theta
 
-RETRY_TIMEOUT = 5
-HEARTBEAT_TIME = 10
+RETRY_TIMEOUT: int = 5
+HEARTBEAT_TIME: int = 10
 
 
 class ParState(Enum):
-    """Enumeration of Participant states.
-    """
+    """Enumeration of Participant states."""
 
     WAITING_FOR_SELECTION = auto()
     TRAINING = auto()
@@ -32,7 +33,7 @@ def rendezvous(channel: grpc.Channel) -> None:
     Args:
         channel: gRPC channel to Coordinator.
     """
-    stub = coordinator_pb2_grpc.CoordinatorStub(channel)
+    stub: CoordinatorStub = CoordinatorStub(channel)  # type: ignore
 
     response = coordinator_pb2.RendezvousResponse.LATER
 
@@ -47,70 +48,72 @@ def rendezvous(channel: grpc.Channel) -> None:
         response = reply.response
 
 
-def start_training(channel: grpc.Channel) -> Tuple[Theta, int, int]:
+def start_training(channel: grpc.Channel) -> Tuple[List[ndarray], int, int]:
     """Starts a training initiation exchange with Coordinator. Returns the decoded
     contents of the response from Coordinator.
 
     Args:
-        channel: gRPC channel to Coordinator.
+    channel: gRPC channel to Coordinator.
 
     Returns:
-        obj:`Theta`: Global model to train on.
-        obj:`int`: Number of epochs.
-        obj:`int`: Epoch base.
+    obj:`List[~numpy.ndarray]`: Global model to train on.
+    obj:`int`: Number of epochs.
+    obj:`int`: Epoch base.
     """
-    stub = coordinator_pb2_grpc.CoordinatorStub(channel)
-    req = coordinator_pb2.StartTrainingRequest()
+
+    stub: CoordinatorStub = CoordinatorStub(channel)  # type: ignore
+    request: StartTrainingRequest = StartTrainingRequest()
     # send request to start training
-    reply = stub.StartTraining(req)
+    reply = stub.StartTraining(request)
     print(f"Participant received: {type(reply)}")
-    theta, epochs, epoch_base = reply.theta, reply.epochs, reply.epoch_base
-    return [proto_to_ndarray(pnda) for pnda in theta], epochs, epoch_base
+
+    weights: List[ndarray]
+    epochs: int
+    epoch_base: int
+    weights, epochs, epoch_base = reply.weights, reply.epochs, reply.epoch_base
+
+    return [proto_to_ndarray(pnda) for pnda in weights], epochs, epoch_base
 
 
 def end_training(
     channel: grpc.Channel,
-    theta_n: Tuple[Theta, int],
-    history: History,
-    metrics: Metrics,
+    weights: List[ndarray],
+    number_samples: int,
+    metrics: Dict[str, List[ndarray]],
 ) -> None:
-    """Starts a training completion exchange with Coordinator, sending a locally
-    trained model and metadata.
+    """Starts a training completion exchange with the coordinator.
+
+    Sends locally trained weights and the number of samples as update of the weights and metadata
+    about metrics by starting a training completion exchange with the coordinator.
 
     Args:
-        channel: gRPC channel to Coordinator.
-        theta_n (obj:`Tuple[Theta, int]`): Locally trained model.
-        history (obj:`History`): History metadata.
-        Metrics (obj:`Metrics`): Metrics metadata.
+    channel: gRPC channel to Coordinator.
+    weight_update (obj:`Tuple[List[ndarray], int]`): Weights of the locally trained model and
+    the number of samples.
+    number_samples (obj: `int`): The number of samples in the training dataset.
+    metrics (obj:`Dict[str, ~numpy.ndarray]`): Metrics metadata.
     """
-    stub = coordinator_pb2_grpc.CoordinatorStub(channel)
-    # build request starting with theta update
-    theta, num = theta_n
-    theta_n_proto = coordinator_pb2.EndTrainingRequest.ThetaUpdate(
-        theta_prime=[ndarray_to_proto(nda) for nda in theta], num_examples=num
-    )
-    # history data
-    h = {  # pylint: disable=invalid-name
-        k: coordinator_pb2.EndTrainingRequest.HistoryValue(values=v)
-        for k, v in history.items()
+
+    stub: CoordinatorStub = CoordinatorStub(channel)  # type: ignore
+    # build request starting with weight update
+    weights_proto = [ndarray_to_proto(nda) for nda in weights]
+
+    # metric data containing the metric names mapped to Metrics as protobuf message
+    metric: Dict[str, EndTrainingRequest.Metrics] = {
+        key: EndTrainingRequest.Metrics(metrics=[ndarray_to_proto(value) for value in values])
+        for key, values in metrics.items()
     }
-    # metrics
-    cid, vbc = metrics
-    m = coordinator_pb2.EndTrainingRequest.Metrics(  # pylint: disable=invalid-name
-        cid=cid, vol_by_class=vbc
+
+    # assembling a request with the update of the weights and the metrics
+    request: EndTrainingRequest = EndTrainingRequest(
+        weights=weights_proto, number_samples=number_samples, metrics=metric
     )
-    # assemble req
-    req = coordinator_pb2.EndTrainingRequest(
-        theta_update=theta_n_proto, history=h, metrics=m
-    )
-    # send request to end training
-    reply = stub.EndTraining(req)
+    reply = stub.EndTraining(request)
     print(f"Participant received: {type(reply)}")
 
 
 def training_round(channel: grpc.Channel, participant: Participant) -> None:
     """Initiates training round exchange with Coordinator.
-
     Begins with `start_training`. Then performs local training computation using
     `participant`. Finally, completes with `end_training`.
 
@@ -118,12 +121,19 @@ def training_round(channel: grpc.Channel, participant: Participant) -> None:
         channel: gRPC channel to Coordinator.
         participant (obj:`Participant`): Local Participant.
     """
-    theta, epochs, base = start_training(channel)
-    # training:
-    theta_n, his, _dict = participant.train_round(theta, epochs, base)
-    # NOTE _dict is the opt_config - ignore for now
-    met = participant.metrics()
-    end_training(channel, theta_n, his, met)
+
+    # retreiving global weights, epochs and base epochs from the coordinator response
+    weights_global: List[ndarray]
+    epochs: int
+    epoch_base: int
+    weights_global, epochs, epoch_base = start_training(channel)
+
+    # starting a local training round of the participant
+    weights: List[ndarray]
+    number_samples: int
+    metrics: Dict[str, List[ndarray]]
+    weights, number_samples, metrics = participant.train_round(weights_global, epochs, epoch_base)
+    end_training(channel, weights, number_samples, metrics)
 
 
 class StateRecord:
@@ -131,9 +141,7 @@ class StateRecord:
     """
 
     # pylint: disable=W0622
-    def __init__(
-        self, state: ParState = ParState.WAITING_FOR_SELECTION, round: int = 0
-    ) -> None:
+    def __init__(self, state: ParState = ParState.WAITING_FOR_SELECTION, round: int = 0) -> None:
         self.cv = threading.Condition()  # pylint: disable=invalid-name
         self.round = round
         self.state = state
@@ -230,7 +238,7 @@ def message_loop(  # pylint: disable=invalid-name
         st (obj:`StateRecord`): Participant state record.
         terminate (obj:`threading.Event`): Event to terminate message loop.
     """
-    coord = coordinator_pb2_grpc.CoordinatorStub(chan)
+    coord = CoordinatorStub(chan)  # type: ignore
     while not terminate.is_set():
         req = coordinator_pb2.HeartbeatRequest()
         reply = coord.Heartbeat(req)
@@ -242,7 +250,6 @@ def start_participant(
     part: Participant, coordinator_url: str
 ) -> None:  # pylint: disable=invalid-name
     """Top-level function for the Participant state machine.
-
     After rendezvous and heartbeat initiation, the Participant is
     WAITING_FOR_SELECTION. When selected, it moves to TRAINING followed by
     POST_TRAINING. If selected again for the next round, it moves back to
