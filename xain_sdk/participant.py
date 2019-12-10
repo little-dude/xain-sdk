@@ -12,13 +12,13 @@ class Participant(ABC):
     @abstractmethod
     def train_round(
         self, weights: List[np.ndarray], epochs: int, epoch_base: int
-    ) -> Tuple[List[np.ndarray], Dict[str, List[np.ndarray]]]:
+    ) -> Tuple[List[np.ndarray], int, Dict[str, List[np.ndarray]]]:
         # pylint: disable=line-too-long
         """Train the model in a federated learning round.
 
         A global model is given in terms of its `weights` and it is trained on local data for a
-        number of `epochs`. The weights of the updated local model are returned together with a set
-        of metrics.
+        number of `epochs`. The weights of the updated local model are returned together with the
+        number of samples in the train dataset and a set of metrics.
 
         Args:
             weights (~typing.List[~numpy.ndarray]): The weights of the global model.
@@ -27,7 +27,7 @@ class Participant(ABC):
                 dependent optimizer parameters).
 
         Returns:
-            ~typing.Tuple[~typing.List[~numpy.ndarray], ~typing.Dict[str, ~typing.List[~numpy.ndarray]]]:
-                The updated model weights and the gathered metrics.
+            ~typing.Tuple[~typing.List[~numpy.ndarray], int, ~typing.Dict[str, ~typing.List[~numpy.ndarray]]]:
+                The updated model weights, the number of training samples and the gathered metrics.
         """
         # pylint: enable=line-too-long

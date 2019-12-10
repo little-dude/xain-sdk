@@ -31,7 +31,7 @@ and must implement the `train_round()` method in order to be able to execute a r
 ```python
 def train_round(
     self, weights: List[np.ndarray], epochs: int, epoch_base: int
-) -> Tuple[List[np.ndarray], Dict[str, List[np.ndarray]]]:
+) -> Tuple[List[np.ndarray], int, Dict[str, List[np.ndarray]]]:
 ```
 
 The expected arguments are:
@@ -42,6 +42,7 @@ The expected arguments are:
 
 The expected return values are:
 - `List[np.ndarray]`: The weights of the local model which results from the global model after certain `epochs` of training on local data.
+- `int`: The number of samples in the train dataset for federated averaging.
 - `Dict[str, List[np.ndarray]]`: The metrics gathered during the training. This might be an empty dictionary if the `Coordinator` is not supposed to collect the metrics.
 
 
@@ -98,12 +99,13 @@ self.model.compile(
 
 ## Keras Data
 
-The data on which the model will be trained, can either be loaded from a data source (e.g. file, bucket, data base) during the initialization of the `Participant` or on the fly in a `train_round()`. Here, we employ randomly generated placeholder data as an example. This is by no means a meaningful dataset, but it should be sufficient to convey the overall idea. The dataset for training gets shuffled and batched, like
+The data on which the model will be trained, can either be loaded from a data source (e.g. file, bucket, data base) during the initialization of the `Participant` or on the fly in a `train_round()`. Here, we employ randomly generated placeholder data as an example. This is by no means a meaningful dataset, but it should be sufficient to convey the overall idea. The number of samples in the training dataset is set in order to apply federated averaging. The dataset for training gets shuffled and batched, like
 
 ```python
 self.trainset: Dataset = Dataset.from_tensor_slices(
     tensors=(np.ones(shape=(80, 10), dtype=np.float32), np.eye(N=80, M=10, dtype=np.float32))
 ).shuffle(buffer_size=80).batch(batch_size=10)
+self.number_samples: int = 80
 ```
 
 while the datasets for validation and testing only get batched, like
@@ -145,10 +147,10 @@ for _ in range(epochs):
 
 This explicit training loop is due to the Tensorflow v1 datasets and their handling in `fit()` and `evaluate()`. Hence a Tensorflow v2 approach would reduce to a single call to `fit()` additionally specifying the validation data and number of epochs. The metrics could then be gathered from the history dictionary returned by `fit()`.
 
-Finally, the updated weights of the local model and the gathered metrics are returned, as
+Finally, the updated weights of the local model, the number of samples of the train dataset and the gathered metrics are returned, as
 
 ```python
-return self.model.get_weights(), metrics
+return self.model.get_weights(), self.number_of_samples, metrics
 ```
 
 Additional information might be included in the metrics dictionary, e.g. data distribution of the local dataset.
@@ -181,6 +183,7 @@ class Participant(ABCParticipant):
         trainset: A dataset for training.
         valset: A dataset for validation.
         testset: A dataset for testing.
+        number_samples: The number of samples in the training dataset.
     """
 
     def __init__(self):
@@ -213,13 +216,15 @@ class Participant(ABCParticipant):
         self.model.compile(
             optimizer="Adam", loss="categorical_crossentropy", metrics=["categorical_accuracy"]
         )
+        # define the number of samples in the training dataset
+        self.number_samples: int = 80
 
         # define or load data to be trained on
         self.trainset: Dataset = (
             Dataset.from_tensor_slices(
                 tensors=(
                     np.ones(shape=(80, 10), dtype=np.float32),
-                    np.eye(N=80, M=10, dtype=np.float32),
+                    np.concatenate([np.eye(N=2, M=2, dtype=np.float32) for _ in range(40)]),
                 )
             )
             .shuffle(buffer_size=80)
@@ -228,25 +233,25 @@ class Participant(ABCParticipant):
         self.valset: Dataset = Dataset.from_tensor_slices(
             tensors=(
                 np.ones(shape=(10, 10), dtype=np.float32),
-                np.eye(N=10, M=10, dtype=np.float32),
+                np.concatenate([np.eye(N=2, M=2, dtype=np.float32) for _ in range(5)]),
             )
         ).batch(batch_size=10)
         self.testset: Dataset = Dataset.from_tensor_slices(
             tensors=(
                 np.ones(shape=(10, 10), dtype=np.float32),
-                np.eye(N=10, M=10, dtype=np.float32),
+                np.concatenate([np.eye(N=2, M=2, dtype=np.float32) for _ in range(5)]),
             )
         ).batch(batch_size=10)
 
     def train_round(  # pylint: disable=unused-argument
         self, weights: List[np.ndarray], epochs: int, epoch_base: int
-    ) -> Tuple[List[np.ndarray], Dict[str, List[np.ndarray]]]:
+    ) -> Tuple[List[np.ndarray], int, Dict[str, List[np.ndarray]]]:
         # pylint: disable=line-too-long
         """Train the model in a federated learning round.
 
         A global model is given in terms of its `weights` and it is trained on local data for a
-        number of `epochs`. The weights of the updated local model are returned together with a set
-        of metrics.
+        number of `epochs`. The weights of the updated local model are returned together with the
+        number of samples in the training dataset and a set of metrics.
 
         Args:
             weights (~typing.List[~numpy.ndarray]): The weights of the global model.
@@ -255,8 +260,8 @@ class Participant(ABCParticipant):
                 dependent optimizer parameters).
 
         Returns:
-            ~typing.Tuple[~typing.List[~numpy.ndarray], ~typing.Dict[str, ~typing.List[~numpy.ndarray]]]:
-                The updated model weights and the gathered metrics.
+            ~typing.Tuple[~typing.List[~numpy.ndarray], int, ~typing.Dict[str, ~typing.List[~numpy.ndarray]]]:
+                The updated model weights, the number of training samples and the gathered metrics.
         """
         # pylint: enable=line-too-long
 
@@ -274,7 +279,6 @@ class Participant(ABCParticipant):
             ):
                 metrics[metric_name].append(metric)
 
-        # return the updated weights of the local model and the gathered metrics
-        return self.model.get_weights(), metrics
-
+        # return the updated weights of the local model, the number of train samples and the gathered metrics
+        return self.model.get_weights(), self.number_samples, metrics
 ```
