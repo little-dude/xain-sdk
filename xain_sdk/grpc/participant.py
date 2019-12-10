@@ -16,6 +16,10 @@ RETRY_TIMEOUT = 5
 HEARTBEAT_TIME = 10
 
 
+# ATTENTION
+# https://github.com/grpc/grpc/blob/master/doc/statuscodes.md
+
+
 class ParState(Enum):
     """Enumeration of Participant states.
     """
@@ -24,6 +28,17 @@ class ParState(Enum):
     TRAINING = auto()
     POST_TRAINING = auto()
     DONE = auto()
+
+
+def log_error(grpcError: grpc.RpcError) -> Tuple[str, str, Tuple[int, str]]:
+    # print the gRPC error message set by server using
+    # context.set_details(msg)
+    msg = grpcError.details()
+    status_code = grpcError.code()
+
+    print(f"Participant received: `{msg}` with status code {status_code.name}.")
+
+    return msg, status_code.name, status_code.value
 
 
 def rendezvous(channel: grpc.Channel) -> None:
@@ -37,14 +52,23 @@ def rendezvous(channel: grpc.Channel) -> None:
     response = coordinator_pb2.RendezvousResponse.LATER
 
     while response == coordinator_pb2.RendezvousResponse.LATER:
-        reply = stub.Rendezvous(coordinator_pb2.RendezvousRequest())
-        if reply.response == coordinator_pb2.RendezvousResponse.ACCEPT:
-            print("Participant received: ACCEPT")
-        elif reply.response == coordinator_pb2.RendezvousResponse.LATER:
-            print(f"Participant received: LATER. Retrying in {RETRY_TIMEOUT}s")
-            time.sleep(RETRY_TIMEOUT)
+        try:
+            reply = stub.Rendezvous(coordinator_pb2.RendezvousRequest())
+            if reply.response == coordinator_pb2.RendezvousResponse.ACCEPT:
+                print("Participant received: ACCEPT")
+            elif reply.response == coordinator_pb2.RendezvousResponse.LATER:
+                print(f"Participant received: LATER. Retrying in {RETRY_TIMEOUT}s")
+                time.sleep(RETRY_TIMEOUT)
 
-        response = reply.response
+            response = reply.response
+        except grpc.RpcError as e:
+            log_error(e)
+            # In case we want to handle some of the status code differently
+            # we can do it this way:
+            # if grpc.StatusCode.INVALID_ARGUMENT == status_code:
+            #     pass
+            print(f"Participant received: ERROR. Retrying in {RETRY_TIMEOUT}s")
+            break
 
 
 def start_training(channel: grpc.Channel) -> Tuple[Theta, int, int]:
@@ -196,26 +220,44 @@ def transit(  # pylint: disable=invalid-name
         beat_reply (obj:`coordinator_pb2.HeartbeatReply`): Heartbeat from Coordinator.
     """
     msg, r = beat_reply.state, beat_reply.round  # pylint: disable=invalid-name
+
     with st.cv:
         if st.state == ParState.WAITING_FOR_SELECTION:
+            # We are currenly in WAITING_FOR_SELECTION
+
             if msg == coordinator_pb2.State.ROUND:
+                # Server transitioned to ROUND
+                # => we transition to TRAINING
                 st.state = ParState.TRAINING
                 st.round = r
                 st.cv.notify()
             elif msg == coordinator_pb2.State.FINISHED:
+                # Server transitioned to FINISHED
+                # => we transition to DONE
                 st.state = ParState.DONE
                 st.cv.notify()
+
         elif st.state == ParState.POST_TRAINING:
+            # We are currently in POST_TRANING
+
             if msg == coordinator_pb2.State.STANDBY:
+                # Server transitioned to STANDBY
+                # => we transition to WAITING_FOR_SELECTION
+
                 # not selected
                 st.state = ParState.WAITING_FOR_SELECTION
                 # prob ok to keep st.round as it is
                 st.cv.notify()
+
             elif msg == coordinator_pb2.State.ROUND and r == st.round + 1:
+                # Server transitioned to ROUND (next round)
+                # => we transition to TRAINING and update current round
                 st.state = ParState.TRAINING
                 st.round = r
                 st.cv.notify()
             elif msg == coordinator_pb2.State.FINISHED:
+                # Server transitioned to FINISHED
+                # => we transition to DONE
                 st.state = ParState.DONE
                 st.cv.notify()
 
@@ -232,44 +274,27 @@ def message_loop(  # pylint: disable=invalid-name
     """
     coord = coordinator_pb2_grpc.CoordinatorStub(chan)
     while not terminate.is_set():
-        req = coordinator_pb2.HeartbeatRequest()
-        reply = coord.Heartbeat(req)
-        transit(st, reply)
-        time.sleep(HEARTBEAT_TIME)
+        try:
+            req = coordinator_pb2.HeartbeatRequest()
+            reply = coord.Heartbeat(req)
 
+            transit(st, reply)
+            time.sleep(HEARTBEAT_TIME)
+        except grpc.RpcError as e:
+            log_error(e)
+            # Suggestion:
+            # Failing heartbeats should be handled differently based
+            # on the status code. E.g. status code UNAVAILABLE might be
+            # temporary and its reasonable to do a certain amount of
+            # retries here. This should be discussed more throughly
+            # for each potential error case.
 
-def start_participant(
-    part: Participant, coordinator_url: str
-) -> None:  # pylint: disable=invalid-name
-    """Top-level function for the Participant state machine.
-
-    After rendezvous and heartbeat initiation, the Participant is
-    WAITING_FOR_SELECTION. When selected, it moves to TRAINING followed by
-    POST_TRAINING. If selected again for the next round, it moves back to
-    TRAINING, otherwise it is back to WAITING_FOR_SELECTION.
-
-    Args:
-        part (obj:`Participant`): Participant object for training computation.
-        coordinator_url (obj:`str`): The URL of the coordinator to connect to.
-    """
-    # use insecure channel for now
-    with grpc.insecure_channel(target=coordinator_url) as chan:  # thread-safe
-        rendezvous(chan)
-
-        st = StateRecord()  # pylint: disable=invalid-name
-        terminate = threading.Event()
-        ml = threading.Thread(  # pylint: disable=invalid-name
-            target=message_loop, args=(chan, st, terminate)
-        )
-        ml.start()
-
-        # in WAITING_FOR_SELECTION state
-        begin_selection_wait(st, chan, part)
-
-        # possibly several training rounds later...
-        # in DONE state
-        terminate.set()
-        ml.join()
+            # This probably should be solved more intelligently
+            # as even a simple network error might invalidate training
+            # results.
+            # As a sensible default we will just transition to WAITING_FOR_SELECTION
+            st.state = ParState.WAITING_FOR_SELECTION
+            st.cv.notify()
 
 
 def begin_selection_wait(  # pylint: disable=invalid-name
@@ -314,3 +339,40 @@ def begin_training(  # pylint: disable=invalid-name
     elif ps == ParState.DONE:
         # that was the last round
         pass
+
+
+def start_participant(
+    part: Participant, coordinator_url: str
+) -> None:  # pylint: disable=invalid-name
+    """Top-level function for the Participant state machine.
+
+    After rendezvous and heartbeat initiation, the Participant is
+    WAITING_FOR_SELECTION. When selected, it moves to TRAINING followed by
+    POST_TRAINING. If selected again for the next round, it moves back to
+    TRAINING, otherwise it is back to WAITING_FOR_SELECTION.
+
+    Args:
+        part (obj:`Participant`): Participant object for training computation.
+        coordinator_url (obj:`str`): The URL of the coordinator to connect to.
+    """
+    # use insecure channel for now
+    with grpc.insecure_channel(target=coordinator_url) as chan:  # thread-safe
+        rendezvous(chan)
+
+        st = StateRecord()  # pylint: disable=invalid-name
+        terminate = threading.Event()
+        ml = threading.Thread(  # pylint: disable=invalid-name
+            target=message_loop, args=(chan, st, terminate)
+        )
+        ml.start()
+
+        try:
+            # in WAITING_FOR_SELECTION state
+            begin_selection_wait(st, chan, part)
+        except grpc.RpcError as e:
+            log_error(e)
+
+        # possibly several training rounds later...
+        # in DONE state
+        terminate.set()
+        ml.join()
