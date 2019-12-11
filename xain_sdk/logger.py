@@ -1,24 +1,44 @@
-"""This module contains all the xain logging configuration"""
-
+"""Logging configuration."""
 
 import logging
+from typing import Type
+
+import structlog
+from structlog._config import BoundLoggerLazyProxy
+
+StructLogger = BoundLoggerLazyProxy
 
 
-def get_logger(name: str, level: str = "INFO") -> logging.Logger:
-    """Returns an instance of the xain logger.
+def get_logger(name: str, level: int = logging.INFO) -> BoundLoggerLazyProxy:
+    """Wrap the python logger with the default configuration of structlog.
 
     Args:
-        name (:obj:`str`): The name of the logger. Typically `__name__`.
-        level (int): Threshold for this logger. Can be one of `CRITICAL`,
-            `ERROR`, `WARNING`, `INFO`, `DEBUG`. Defaults to `INFO`.
+        name (str): Identification name. For module name pass name=__name__.
+        level (int): Threshold for this logger. Defaults to logging.INFO.
 
     Returns:
-        :class:`~logging.Logger`: Configured logger.
+        ~structlog._config.BoundLoggerLazyProxy: The wrapped python logger with the default
+            configuration of structlog.
     """
 
-    logging.basicConfig(
-        format="[%(asctime)s] [%(levelname)s] (%(name)s) %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        level=level,
+    structlog.configure(
+        processors=[
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
     )
-    return logging.getLogger(name)
+
+    formatter: structlog.stdlib.ProcessorFormatter = structlog.stdlib.ProcessorFormatter(
+        processor=structlog.processors.JSONRenderer(indent=2, sort_keys=True)
+    )
+
+    handler: logging.StreamHandler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+    logger: logging.Logger = logging.getLogger(name)
+    logger.addHandler(handler)
+    logger.setLevel(level)
+
+    return structlog.wrap_logger(logger)

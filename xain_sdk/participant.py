@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
-import numpy as np
+from numpy import ndarray
 
 
 class Participant(ABC):
@@ -11,8 +11,8 @@ class Participant(ABC):
 
     @abstractmethod
     def train_round(
-        self, weights: List[np.ndarray], epochs: int, epoch_base: int
-    ) -> Tuple[List[np.ndarray], int, Dict[str, List[np.ndarray]]]:
+        self, weights: List[ndarray], epochs: int, epoch_base: int
+    ) -> Tuple[List[ndarray], int, Dict[str, List[ndarray]]]:
         # pylint: disable=line-too-long
         """Train the model in a federated learning round.
 
