@@ -233,41 +233,26 @@ def transit(  # pylint: disable=invalid-name
 
     with st.cv:
         if st.state == ParState.WAITING_FOR_SELECTION:
-            # We are currenly in WAITING_FOR_SELECTION
-
             if msg == coordinator_pb2.State.ROUND:
-                # Server transitioned to ROUND
-                # => we transition to TRAINING
                 st.state = ParState.TRAINING
                 st.round = r
                 st.cv.notify()
             elif msg == coordinator_pb2.State.FINISHED:
-                # Server transitioned to FINISHED
-                # => we transition to DONE
                 st.state = ParState.DONE
                 st.cv.notify()
 
         elif st.state == ParState.POST_TRAINING:
-            # We are currently in POST_TRANING
-
             if msg == coordinator_pb2.State.STANDBY:
-                # Server transitioned to STANDBY
-                # => we transition to WAITING_FOR_SELECTION
-
                 # not selected
                 st.state = ParState.WAITING_FOR_SELECTION
                 # prob ok to keep st.round as it is
                 st.cv.notify()
 
             elif msg == coordinator_pb2.State.ROUND and r == st.round + 1:
-                # Server transitioned to ROUND (next round)
-                # => we transition to TRAINING and update current round
                 st.state = ParState.TRAINING
                 st.round = r
                 st.cv.notify()
             elif msg == coordinator_pb2.State.FINISHED:
-                # Server transitioned to FINISHED
-                # => we transition to DONE
                 st.state = ParState.DONE
                 st.cv.notify()
 
