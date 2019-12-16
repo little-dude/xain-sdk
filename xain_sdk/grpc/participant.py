@@ -18,10 +18,6 @@ RETRY_TIMEOUT: int = 5
 HEARTBEAT_TIME: int = 10
 
 
-# ATTENTION
-# https://github.com/grpc/grpc/blob/master/doc/statuscodes.md
-
-
 class ParState(Enum):
     """Enumeration of Participant states."""
 
