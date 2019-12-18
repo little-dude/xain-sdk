@@ -8,32 +8,33 @@
 
 ## Overview
 
-The XAIN project is building a GDPR-compliance layer for machine learning. The approach relies on Federated Learning 
-as enabling technology that allows production AI applications to be fully privacy compliant.
+The XAIN project is building a privacy layer for machine learning so that AI projects can meet compliance such as
+GDPR and CCPA. The approach relies on Federated Learning as enabling technology that allows production AI
+applications to be fully privacy compliant.
 
-Federated Learning also enables different use-cases that are not strictly privacy related such as connecting data 
+Federated Learning also enables different use-cases that are not strictly privacy related such as connecting data
 lakes, reaching higher model performance in unbalanced datasets and utilising AI models on the edge.
 
 The main components:
 
-- Coordinator -- the entity that manages all aspects of the execution of rounds for Federated Learning. 
-This includes the registration of clients, the selection of clients that participate in a given round, the 
-determination of whether sufficiently many clients have sent updated local models, the computation of an aggregated 
+- Coordinator – the entity that manages all aspects of the execution of rounds for Federated Learning.
+This includes the registration of clients, the selection of participants for a given round, the determination of
+whether sufficiently many participants have sent updated local models, the computation of an aggregated
 global model, and the sending of the latter model to storage or other entities.
-- Client or Participant -- an entity that is the originator of a local dataset that can be selected for local 
-training in the Federated Learning. 
-- Selected Participant -- a Client or Participant that has been selected by the Coordinator to participate in the next 
+- Client or Participant – an entity that is the originator of a local dataset that can be selected for local
+training in the Federated Learning.
+- Selected Participant – a Participant that has been selected by the Coordinator to participate in the next
 or current round.
-- SDK -- The library which allows Participants or Client to interact with the XAIN Platform.
+- SDK – The library which allows Participants to interact with the XAIN Platform.
 
-The source code in this project implements the XAIN SDK to provide your local application a way 
+The source code in this project implements the XAIN SDK to provide your local application a way
 to communicate with the XAIN Coordinator.
 
 ## Getting started
 
 ### Run XAIN Coordinator
 
-There are two options to run XAIN Coordinator to perform Federated Learning on locally pretrained models: 
+There are two options to run XAIN Coordinator to perform Federated Learning on locally pretrained models:
 
 * Go to the main page of the project and request a demo [XAIN Platform](https://www.xain.io/federated-learning-platform)
 * Self-hosted solution, go to [XAIN FL Project](https://github.com/xainag/xain-fl) for more details
@@ -50,7 +51,7 @@ pip install xain-sdk
 
 #### 2. Register your application and the device to participate in the aggregation
 
-Now you have to register your Participants to participate in the Federated Learning rounds. To do so, 
+Now you have to register your Participants to participate in the Federated Learning rounds. To do so,
 just send the registration request to the XAIN Coordinator:
 
 participant.py
@@ -74,16 +75,16 @@ class MyParticipant(Participant):
     def train_round(
         self, weights: List[ndarray], epochs: int, epoch_base: int
     ) -> Tuple[List[ndarray], int, Dict[str, List[ndarray]]]:
-        
+
         # define the number of samples in the training dataset
         number_train_samples: int = 80
-        
+
         # load weights into the model
         ...
 
         # train the model for the specified number of epochs
         ...
-        
+
         metrics = {
             "some_metric_1": [],
             "some_metric_2": [],
@@ -100,7 +101,7 @@ start.py
 ```python
 from xain_sdk.participant_state_machine import start_participant
 
-# Import MyParticipant from your participant.py file 
+# Import MyParticipant from your participant.py file
 from participant import MyParticipant
 
 # Create a new participant
@@ -110,14 +111,14 @@ p = MyParticipant()
     Register your new participant to interact with XAIN Coordinator (hosted at XAIN Platform or self-hosted solution).
     Function start_participant requires two arguments:
     - your new participant to register to interact with Coordinator,
-    - the URL of the Coordinator to connect to. 
-""" 
+    - the URL of the Coordinator to connect to.
+"""
 start_participant(p, "your_host:your_port")
 ```
 
 Now you have registered a participant. Simply repeat this step for all the participants you wish to register.
 
-The XAIN Coordinator will take care of the rest: 
+The XAIN Coordinator will take care of the rest:
 - The aggregation of your locally pretrained models.
 - Triggering new training rounds for the selected participants and aggregating these models.
 
@@ -125,8 +126,8 @@ The XAIN Coordinator will take care of the rest:
 #### Upcoming feature: Model metrics
 
 Upcoming feature, which will be available as [XAIN Platform solution](https://www.xain.io/federated-learning-platform)
-If you would like to compare the performance of aggregated models, please send the specific metrics of your use 
-case that you wish to monitor to XAIN's Coordinator. This will then be reflected in the web interface 
+If you would like to compare the performance of aggregated models, please send the specific metrics of your use
+case that you wish to monitor to XAIN's Coordinator. This will then be reflected in the web interface
 under the `Project Management` tab. In order to send your metrics to XAIN's Coordinator, you will need to update the `train_round()` method accordingly.
 
 ## Example
