@@ -11,16 +11,16 @@ from numproto import ndarray_to_proto, proto_to_ndarray
 from numpy import ndarray
 
 from xain_sdk.cproto.coordinator_pb2 import (
-	EndTrainingReply,
-	EndTrainingRequest,
-	HeartbeatReply,
-	HeartbeatRequest,
-	RendezvousReply,
-	RendezvousRequest,
-	RendezvousResponse,
-	StartTrainingReply,
-	StartTrainingRequest,
-	State,
+    EndTrainingReply,
+    EndTrainingRequest,
+    HeartbeatReply,
+    HeartbeatRequest,
+    RendezvousReply,
+    RendezvousRequest,
+    RendezvousResponse,
+    StartTrainingReply,
+    StartTrainingRequest,
+    State,
 )
 from xain_sdk.cproto.coordinator_pb2_grpc import CoordinatorStub
 from xain_sdk.logger import StructLogger, get_logger
