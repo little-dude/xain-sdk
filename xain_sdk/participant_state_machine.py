@@ -67,7 +67,9 @@ def rendezvous(channel: Channel) -> None:
         if reply.response == RendezvousResponse.ACCEPT:
             logger.info("Participant received ACCEPT")
         elif reply.response == RendezvousResponse.LATER:
-            logger.info("Participant received LATER. Retrying in", seconds=RETRY_TIMEOUT)
+            logger.info(
+                "Participant received LATER. Retrying in", seconds=RETRY_TIMEOUT
+            )
             time.sleep(RETRY_TIMEOUT)
 
         response = reply.response
@@ -91,7 +93,9 @@ def start_training(channel: Channel) -> Tuple[List[ndarray], int, int]:
 
     # send request to start training
     try:
-        reply: StartTrainingReply = coordinator.StartTraining(request=StartTrainingRequest())
+        reply: StartTrainingReply = coordinator.StartTraining(
+            request=StartTrainingRequest()
+        )
     except grpc.RpcError as rpc_error:
         logger.error("Call failure", rpc_error=rpc_error)
         raise rpc_error
@@ -132,7 +136,9 @@ def end_training(
 
     # metric data containing the metric names mapped to Metrics as protobuf message
     metrics_proto: Dict[str, EndTrainingRequest.Metrics] = {
-        key: EndTrainingRequest.Metrics(metrics=[ndarray_to_proto(value) for value in values])
+        key: EndTrainingRequest.Metrics(
+            metrics=[ndarray_to_proto(value) for value in values]
+        )
         for key, values in metrics.items()
     }
 
@@ -177,14 +183,16 @@ def training_round(channel: Channel, participant: Participant) -> None:
     )
 
     # return updated weights, number of training samples and metrics metadata to the coordinator
-    end_training(channel=channel, weights=weights, number_samples=number_samples, metrics=metrics)
+    end_training(
+        channel=channel, weights=weights, number_samples=number_samples, metrics=metrics
+    )
 
 
 class StateRecord:
     """Thread-safe record of a participant's state and round number."""
 
     def __init__(  # pylint: disable=redefined-builtin
-        self, state: ParState = ParState.WAITING_FOR_SELECTION, round: int = 0,
+        self, state: ParState = ParState.WAITING_FOR_SELECTION, round: int = 0
     ) -> None:
         """Initialize the state record.
 
@@ -282,7 +290,9 @@ def transit(state_record: StateRecord, heartbeat_reply: HeartbeatReply) -> None:
                 state_record.cond.notify()
 
 
-def message_loop(channel: Channel, state_record: StateRecord, terminate: threading.Event) -> None:
+def message_loop(
+    channel: Channel, state_record: StateRecord, terminate: threading.Event
+) -> None:
     """Periodically send (and handle) heartbeat messages in a loop.
 
     Args:
@@ -326,11 +336,15 @@ def start_participant(participant: Participant, coordinator_url: str) -> None:
 
         state_record: StateRecord = StateRecord()
         terminate: threading.Event = threading.Event()
-        msg_loop = threading.Thread(target=message_loop, args=(channel, state_record, terminate))
+        msg_loop = threading.Thread(
+            target=message_loop, args=(channel, state_record, terminate)
+        )
         msg_loop.start()
 
         # in WAITING_FOR_SELECTION state
-        begin_selection_wait(state_record=state_record, channel=channel, participant=participant)
+        begin_selection_wait(
+            state_record=state_record, channel=channel, participant=participant
+        )
 
         # possibly several training rounds later... in DONE state
         terminate.set()
@@ -352,12 +366,16 @@ def begin_selection_wait(
     state: ParState = state_record.wait_until_selected_or_done()
     if state == ParState.TRAINING:
         # selected
-        begin_training(state_record=state_record, channel=channel, participant=participant)
+        begin_training(
+            state_record=state_record, channel=channel, participant=participant
+        )
     elif state == ParState.DONE:
         pass
 
 
-def begin_training(state_record: StateRecord, channel: Channel, participant: Participant) -> None:
+def begin_training(
+    state_record: StateRecord, channel: Channel, participant: Participant
+) -> None:
     """Perform actions in Participant state TRAINING and POST_TRAINING.
 
     Args:
@@ -375,10 +393,14 @@ def begin_training(state_record: StateRecord, channel: Channel, participant: Par
     state: ParState = state_record.wait_until_next_round()
     if state == ParState.TRAINING:
         # selected again
-        begin_training(state_record=state_record, channel=channel, participant=participant)
+        begin_training(
+            state_record=state_record, channel=channel, participant=participant
+        )
     elif state == ParState.WAITING_FOR_SELECTION:
         # not this time
-        begin_selection_wait(state_record=state_record, channel=channel, participant=participant)
+        begin_selection_wait(
+            state_record=state_record, channel=channel, participant=participant
+        )
     elif state == ParState.DONE:
         # that was the last round
         pass
