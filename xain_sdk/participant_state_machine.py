@@ -339,7 +339,7 @@ def start_participant(participant: Participant, coordinator_url: str) -> None:
 
 def begin_selection_wait(
     state_record: StateRecord, channel: Channel, participant: Participant
-    ) -> None:
+) -> None:
     """Perform actions in Participant state WAITING_FOR_SELECTION.
 
     Args:
