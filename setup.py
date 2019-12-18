@@ -43,7 +43,7 @@ class CustomDevelopCommand(develop):
         # get the path of grpc_tools protofiles
         grpc_path = grpc_tools.__path__[0]
 
-        proto_files = glob.glob("./protobuf/xain_sdk/grpc/*.proto")
+        proto_files = glob.glob("./protobuf/xain_sdk/cproto/*.proto")
         command = [
             "grpc_tools.protoc",
             # path to numproto .proto files
@@ -69,6 +69,7 @@ install_requires = [
     "grpcio~=1.23",  # Apache License 2.0
     "protobuf~=3.9",  # 3-Clause BSD License
     "numproto~=0.3",  # Apache License 2.0
+    "structlog==19.1.0",  # Apache License 2.0 & MIT License
 ]
 
 dev_require = [
@@ -88,6 +89,7 @@ tests_require = [
     "pytest==4.6.2",  # MIT license
     "pytest-cov==2.7.1",  # MIT
     "pytest-watch==4.2.0",  # MIT
+    "grpcio-testing==1.25.0",  # Apache License 2.0
 ]
 
 docs_require = ["Sphinx==2.2.1", "recommonmark==0.6.0", "sphinx-rtd-theme==0.4.3"]
@@ -99,10 +101,7 @@ setup(
     long_description=readme,
     long_description_content_type="text/markdown",
     url="https://github.com/xainag/xain-sdk",
-    author=[
-        "Daniel J. Beutel <daniel.beutel@xain.io>",
-        "Taner Topal <taner.topal@xain.io>",
-    ],
+    author=["XAIN AG"],
     author_email="services@xain.io",
     license="Apache License Version 2.0",
     zip_safe=False,

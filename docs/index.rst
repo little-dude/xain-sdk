@@ -3,8 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to XAIN-SDK's documentation!
+XAIN-SDK
 ====================================
+
+Welcome to XAIN-SDK's documentation!
 
 .. toctree::
    :maxdepth: 2
