@@ -67,9 +67,7 @@ def rendezvous(channel: Channel) -> None:
         if reply.response == RendezvousResponse.ACCEPT:
             logger.info("Participant received ACCEPT")
         elif reply.response == RendezvousResponse.LATER:
-            logger.info(
-                "Participant received LATER. Retrying in", seconds=RETRY_TIMEOUT
-            )
+            logger.info("Participant received LATER. Retrying in", seconds=RETRY_TIMEOUT)
             time.sleep(RETRY_TIMEOUT)
 
         response = reply.response
@@ -93,9 +91,7 @@ def start_training(channel: Channel) -> Tuple[List[ndarray], int, int]:
 
     # send request to start training
     try:
-        reply: StartTrainingReply = coordinator.StartTraining(
-            request=StartTrainingRequest()
-        )
+        reply: StartTrainingReply = coordinator.StartTraining(request=StartTrainingRequest())
     except grpc.RpcError as rpc_error:
         logger.error("Call failure", rpc_error=rpc_error)
         raise rpc_error
@@ -334,16 +330,16 @@ def start_participant(participant: Participant, coordinator_url: str) -> None:
         msg_loop.start()
 
         # in WAITING_FOR_SELECTION state
-        begin_selection_wait(
-            state_record=state_record, channel=channel, participant=participant
-        )
+        begin_selection_wait(state_record=state_record, channel=channel, participant=participant)
 
         # possibly several training rounds later... in DONE state
         terminate.set()
         msg_loop.join()
 
 
-def begin_selection_wait(state_record: StateRecord, channel: Channel, participant: Participant) -> None:
+def begin_selection_wait(
+    state_record: StateRecord, channel: Channel, participant: Participant
+    ) -> None:
     """Perform actions in Participant state WAITING_FOR_SELECTION.
 
     Args:
