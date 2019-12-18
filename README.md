@@ -8,23 +8,24 @@
 
 ## Overview
 
-The XAIN project is building a GDPR-compliance layer for machine learning. The approach relies on Federated Learning 
-as enabling technology that allows production AI applications to be fully privacy compliant.
+The XAIN project is building a privacy layer for machine learning so that AI projects can meet compliance such as
+GDPR and CCPA. The approach relies on Federated Learning as enabling technology that allows production AI
+applications to be fully privacy compliant.
 
 Federated Learning also enables different use-cases that are not strictly privacy related such as connecting data 
 lakes, reaching higher model performance in unbalanced datasets and utilising AI models on the edge.
 
 The main components:
 
-- Coordinator -- the entity that manages all aspects of the execution of rounds for Federated Learning. 
-This includes the registration of clients, the selection of clients that participate in a given round, the 
-determination of whether sufficiently many clients have sent updated local models, the computation of an aggregated 
+- Coordinator – the entity that manages all aspects of the execution of rounds for Federated Learning. 
+This includes the registration of clients, the selection of participants for a given round, the determination of
+whether sufficiently many participants have sent updated local models, the computation of an aggregated 
 global model, and the sending of the latter model to storage or other entities.
-- Client or Participant -- an entity that is the originator of a local dataset that can be selected for local 
+- Client or Participant – an entity that is the originator of a local dataset that can be selected for local 
 training in the Federated Learning. 
-- Selected Participant -- a Client or Participant that has been selected by the Coordinator to participate in the next 
+- Selected Participant – a Participant that has been selected by the Coordinator to participate in the next 
 or current round.
-- SDK -- The library which allows Participants or Client to interact with the XAIN Platform.
+- SDK – The library which allows Participants to interact with the XAIN Platform.
 
 The source code in this project implements the XAIN SDK to provide your local application a way 
 to communicate with the XAIN Coordinator.
