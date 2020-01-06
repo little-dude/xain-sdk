@@ -158,4 +158,4 @@ Additional information might be included in the metrics dictionary, e.g. data di
 
 ## Source Code
 
-You can find the source code of the example [here](https://github.com/xainag/xain-sdk/blob/master/examples/keras/example.py)
+You can find the source code of the example [here](https://github.com/xainag/xain-sdk/blob/master/examples/keras/example.py).

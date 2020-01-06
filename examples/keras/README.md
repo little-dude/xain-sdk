@@ -1,6 +1,6 @@
 # Tensorflow Keras Participant Example
 
-You can the explanation of the example [here](https://xain-sdk.readthedocs.io/en/latest/examples/tensorflow_keras.html).
+You can find the explanation of the example [here](https://xain-sdk.readthedocs.io/en/latest/examples/tensorflow_keras.html).
 
 ## Install
 
