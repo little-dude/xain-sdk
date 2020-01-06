@@ -83,7 +83,7 @@ intersphinx_mapping = {
 
 
 def run_apidoc(_):
-    exclude = ["../xain_sdk/**_pb2**"]
+    exclude = []
 
     argv = [
         "--doc-project",

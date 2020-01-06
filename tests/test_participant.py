@@ -1,7 +1,7 @@
 """Tests for GRPC Participant."""
 
+from xain_proto.fl.coordinator_pb2 import HeartbeatReply, State
 from xain_sdk.participant_state_machine import ParState, StateRecord, transit
-from xain_sdk.cproto.coordinator_pb2 import HeartbeatReply, State
 
 
 def test_from_start() -> None:

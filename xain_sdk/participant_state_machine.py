@@ -8,9 +8,9 @@ from typing import Dict, List, Tuple
 from grpc import Channel, insecure_channel
 from numproto import ndarray_to_proto, proto_to_ndarray
 from numpy import ndarray
+from xain_proto.fl import coordinator_pb2
+from xain_proto.fl.coordinator_pb2_grpc import CoordinatorStub
 
-from xain_sdk.cproto import coordinator_pb2
-from xain_sdk.cproto.coordinator_pb2_grpc import CoordinatorStub
 from xain_sdk.logger import get_logger
 from xain_sdk.participant import Participant
 
@@ -226,7 +226,7 @@ def transit(
     Args:
         state_record (~xain_sdk.participant_state_machine.StateRecord): The updatable state record
             of the participant.
-        heartbeat_reply (~xain_sdk.cproto.coordinator_pb2.HeartbeatReply): The heartbeat reply from
+        heartbeat_reply (~xain_proto.fl.coordinator_pb2.HeartbeatReply): The heartbeat reply from
             the coordinator.
     """
 

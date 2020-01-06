@@ -30,8 +30,7 @@ jobs:
 
       - name: black
         run: |
-          black --check --exclude "xain_sdk/cproto/.*_pb2.*" \
-          setup.py xain_sdk tests
+          black --check setup.py xain_sdk tests
 
       - name: isort
         run: |
