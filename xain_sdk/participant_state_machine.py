@@ -9,23 +9,12 @@ from grpc import Channel, insecure_channel
 from numproto import ndarray_to_proto, proto_to_ndarray
 from numpy import ndarray
 
-from xain_sdk.cproto.coordinator_pb2 import (
-    EndTrainingReply,
-    EndTrainingRequest,
-    HeartbeatReply,
-    HeartbeatRequest,
-    RendezvousReply,
-    RendezvousRequest,
-    RendezvousResponse,
-    StartTrainingReply,
-    StartTrainingRequest,
-    State,
-)
+from xain_sdk.cproto import coordinator_pb2
 from xain_sdk.cproto.coordinator_pb2_grpc import CoordinatorStub
-from xain_sdk.logger import StructLogger, get_logger
+from xain_sdk.logger import get_logger
 from xain_sdk.participant import Participant
 
-logger: StructLogger = get_logger(__name__)
+logger = get_logger(__name__)
 
 
 # timings in seconds
@@ -51,15 +40,15 @@ def rendezvous(channel: Channel) -> None:
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
 
-    response: RendezvousResponse = RendezvousResponse.LATER
-    reply: RendezvousReply
-    while response == RendezvousResponse.LATER:
-        reply = coordinator.Rendezvous(request=RendezvousRequest())
-        if reply.response == RendezvousResponse.ACCEPT:
-            logger.info("Participant received ACCEPT")
-        elif reply.response == RendezvousResponse.LATER:
+    response: coordinator_pb2.RendezvousResponse = coordinator_pb2.RendezvousResponse.LATER
+    reply: coordinator_pb2.RendezvousReply
+    while response == coordinator_pb2.RendezvousResponse.LATER:
+        reply = coordinator.Rendezvous(request=coordinator_pb2.RendezvousRequest())
+        if reply.response == coordinator_pb2.RendezvousResponse.ACCEPT:
+            logger.info("Participant received: ACCEPT")
+        elif reply.response == coordinator_pb2.RendezvousResponse.LATER:
             logger.info(
-                "Participant received LATER. Retrying in", seconds=RETRY_TIMEOUT
+                "Participant received: LATER. Retrying...", retry_timeout=RETRY_TIMEOUT
             )
             time.sleep(RETRY_TIMEOUT)
 
@@ -83,10 +72,10 @@ def start_training(channel: Channel) -> Tuple[List[ndarray], int, int]:
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
 
     # send request to start training
-    reply: StartTrainingReply = coordinator.StartTraining(
-        request=StartTrainingRequest()
+    reply: coordinator_pb2.StartTrainingReply = coordinator.StartTraining(
+        request=coordinator_pb2.StartTrainingRequest()
     )
-    logger.info("Participant received reply", reply=type(reply))
+    logger.info("Participant received", reply_type=type(reply))
 
     weights: List[ndarray] = [proto_to_ndarray(weight) for weight in reply.weights]
     epochs: int = reply.epochs
@@ -118,19 +107,19 @@ def end_training(
     weights_proto: List = [ndarray_to_proto(weight) for weight in weights]
 
     # metric data containing the metric names mapped to Metrics as protobuf message
-    metrics_proto: Dict[str, EndTrainingRequest.Metrics] = {
-        key: EndTrainingRequest.Metrics(
+    metrics_proto: Dict[str, coordinator_pb2.EndTrainingRequest.Metrics] = {
+        key: coordinator_pb2.EndTrainingRequest.Metrics(
             metrics=[ndarray_to_proto(value) for value in values]
         )
         for key, values in metrics.items()
     }
 
     # assembling a request with the update of the weights and the metrics
-    request: EndTrainingRequest = EndTrainingRequest(
+    request: coordinator_pb2.EndTrainingRequest = coordinator_pb2.EndTrainingRequest(
         weights=weights_proto, number_samples=number_samples, metrics=metrics_proto
     )
-    reply: EndTrainingReply = coordinator.EndTraining(request=request)
-    logger.info("Participant received reply", reply=type(reply))
+    reply: coordinator_pb2.EndTrainingReply = coordinator.EndTraining(request=request)
+    logger.info("Participant received", reply_type=type(reply))
 
 
 def training_round(channel: Channel, participant: Participant) -> None:
@@ -229,7 +218,9 @@ class StateRecord:
             return self.state
 
 
-def transit(state_record: StateRecord, heartbeat_reply: HeartbeatReply) -> None:
+def transit(
+    state_record: StateRecord, heartbeat_reply: coordinator_pb2.HeartbeatReply
+) -> None:
     """Participant state transition function on a heartbeat response. Updates the state record.
 
     Args:
@@ -239,28 +230,30 @@ def transit(state_record: StateRecord, heartbeat_reply: HeartbeatReply) -> None:
             the coordinator.
     """
 
-    state: State = heartbeat_reply.state
+    state: coordinator_pb2.State = heartbeat_reply.state
     round: int = heartbeat_reply.round  # pylint: disable=redefined-builtin
     with state_record.cond:
         if state_record.state == ParState.WAITING_FOR_SELECTION:
-            if state == State.ROUND:
+            if state == coordinator_pb2.State.ROUND:
                 state_record.state = ParState.TRAINING
                 state_record.round = round
                 state_record.cond.notify()
-            elif state == State.FINISHED:
+            elif state == coordinator_pb2.State.FINISHED:
                 state_record.state = ParState.DONE
                 state_record.cond.notify()
         elif state_record.state == ParState.POST_TRAINING:
-            if state == State.STANDBY:
+            if state == coordinator_pb2.State.STANDBY:
                 # not selected
                 state_record.state = ParState.WAITING_FOR_SELECTION
                 # prob ok to keep state_record.round as it is
                 state_record.cond.notify()
-            elif state == State.ROUND and round == state_record.round + 1:
+            elif (
+                state == coordinator_pb2.State.ROUND and round == state_record.round + 1
+            ):
                 state_record.state = ParState.TRAINING
                 state_record.round = round
                 state_record.cond.notify()
-            elif state == State.FINISHED:
+            elif state == coordinator_pb2.State.FINISHED:
                 state_record.state = ParState.DONE
                 state_record.cond.notify()
 
@@ -279,9 +272,10 @@ def message_loop(
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
     while not terminate.is_set():
+        request = coordinator_pb2.HeartbeatRequest()
         transit(
             state_record=state_record,
-            heartbeat_reply=coordinator.Heartbeat(request=HeartbeatRequest()),
+            heartbeat_reply=coordinator.Heartbeat(request=request),
         )
         time.sleep(HEARTBEAT_TIME)
 
