@@ -9,6 +9,7 @@ from tensorflow.keras import Input, Model
 from tensorflow.keras.layers import Dense
 
 from xain_sdk.participant import Participant as ABCParticipant
+from xain_sdk.participant_state_machine import start_participant
 
 
 class Participant(ABCParticipant):
@@ -124,3 +125,11 @@ class Participant(ABCParticipant):
 
         # return the updated weights of the local model, the number of train samples and the gathered metrics
 
+
+def main():
+    p = Participant()
+    start_participant(p, "10.10.100.250:50051")
+
+
+if __name__ == "__main__":
+    main()
