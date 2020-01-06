@@ -124,11 +124,12 @@ class Participant(ABCParticipant):
                 metrics[metric_name].append(metric)
 
         # return the updated weights of the local model, the number of train samples and the gathered metrics
+        return self.model.get_weights(), self.number_samples, metrics
 
 
 def main():
     p = Participant()
-    start_participant(p, "10.10.100.250:50051")
+    start_participant(p, "127.0.0.1:50051")
 
 
 if __name__ == "__main__":
