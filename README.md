@@ -149,3 +149,9 @@ If you get stuck, don't worry, we are here to help. You can find more informatio
 In case you don't find answers to your problems or questions, simply ask your question to the community here:
 
 * [Gitter XAIN PROJECT](https://gitter.im/xainag)
+
+Contents
+--------
+
+* [Examples](examples/tensorflow_keras.md)
+* [API Documentation](_code_reference/index.rst)

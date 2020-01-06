@@ -13,8 +13,9 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("../xain-sdk"))
+from recommonmark.transform import AutoStructify
 
+sys.path.insert(0, os.path.abspath("../xain-sdk"))
 
 # -- Project information -----------------------------------------------------
 
@@ -106,3 +107,9 @@ def run_apidoc(_):
 
 def setup(app):
     app.connect("builder-inited", run_apidoc)
+    app.add_config_value(
+        "recommonmark_config",
+        {"auto_toc_tree_section": "Contents", "auto_toc_maxdepth": 2,},
+        True,
+    )
+    app.add_transform(AutoStructify)
