@@ -16,10 +16,11 @@ Examples
 --------
 
 .. toctree::
-    :maxdepth: 1
-    :glob:
+   :maxdepth: 2
+   :glob:
 
-    examples/**
+   examples/*
+
 
 API Documentation
 -----------------

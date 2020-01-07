@@ -293,6 +293,7 @@ def start_participant(participant: Participant, coordinator_url: str) -> None:
     """
 
     # use insecure channel for now
+
     with insecure_channel(target=coordinator_url) as channel:  # thread-safe
         rendezvous(channel=channel)
 
