@@ -50,8 +50,7 @@ tests_require = [
 
 docs_require = [
     "Sphinx==2.2.1",
-    "recommonmark==0.6.0",
-    "sphinx-rtd-theme==0.4.3",
+    "m2r==0.2.1",
 ]
 
 setup(
