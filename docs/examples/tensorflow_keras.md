@@ -31,7 +31,7 @@ and must implement the `train_round()` method in order to be able to execute a r
 ```python
 def train_round(
     self, weights: List[np.ndarray], epochs: int, epoch_base: int
-) -> Tuple[List[np.ndarray], int, Dict[str, List[np.ndarray]]]:
+) -> Tuple[List[np.ndarray], int, Dict[str, np.ndarray]]:
 ```
 
 The expected arguments are:
@@ -43,7 +43,7 @@ The expected arguments are:
 The expected return values are:
 - `List[np.ndarray]`: The weights of the local model which results from the global model after certain `epochs` of training on local data.
 - `int`: The number of samples in the train dataset for federated averaging.
-- `Dict[str, List[np.ndarray]]`: The metrics gathered during the training. This might be an empty dictionary if the `Coordinator` is not supposed to collect the metrics.
+- `Dict[str, np.ndarray]`: The metrics gathered during the training. This might be an empty dictionary if the `Coordinator` is not supposed to collect the metrics.
 
 
 ## Keras Model
@@ -128,21 +128,22 @@ The implementation of the actual `train_round()` method consists of three main s
 self.model.set_weights(weights)
 ```
 
-Next, a dictionary for the gathered metrics is initialized by
+Next, the local model is trained for certain `epochs` on the local data, whereby the metrics are gathered in each epoch, as
 
 ```python
-metrics: Dict[str, List[np.ndarray]] = {metric_name: [] for metric_name in self.model.metrics_names}
-```
-
-and the local model is trained for certain `epochs` on the local data, whereby the metrics gathered in each epoch are added to the dictionary, as
-
-```python
+metrics_per_epoch: List[List[np.ndarray]] = []
 for _ in range(epochs):
     self.model.fit(x=self.trainset, verbose=2, shuffle=False)
-    for metric_name, metric in zip(
-        self.model.metrics_names, self.model.evaluate(x=self.valset, verbose=0)
-    ):
-        metrics[metric_name].append(metric)
+    metrics_per_epoch.append(self.model.evaluate(x=self.valset, verbose=0))
+```
+
+The metrics are transformed into a dictionary, which maps metric names to the gathered metric values, by
+
+```python
+metrics: Dict[str, np.ndarray] = {
+    name: np.stack(np.atleast_1d(*metric))
+    for name, metric in zip(self.model.metrics_names, zip(*metrics_per_epoch))
+}
 ```
 
 This explicit training loop is due to the Tensorflow v1 datasets and their handling in `fit()` and `evaluate()`. Hence a Tensorflow v2 approach would reduce to a single call to `fit()` additionally specifying the validation data and number of epochs. The metrics could then be gathered from the history dictionary returned by `fit()`.
@@ -153,9 +154,7 @@ Finally, the updated weights of the local model, the number of samples of the tr
 return self.model.get_weights(), self.number_of_samples, metrics
 ```
 
-Additional information might be included in the metrics dictionary, e.g. data distribution of the local dataset.
-
 
 ## Source Code
 
-You can find the source code of the example [here](https://github.com/xainag/xain-sdk/blob/master/examples/keras/example.py).
+The source code of the example can be found [here](https://github.com/xainag/xain-sdk/blob/master/examples/tensorflow_keras/example.py).

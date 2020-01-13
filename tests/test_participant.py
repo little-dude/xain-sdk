@@ -1,6 +1,7 @@
 """Tests for GRPC Participant."""
 
 from xain_proto.fl.coordinator_pb2 import HeartbeatReply, State
+
 from xain_sdk.participant_state_machine import ParState, StateRecord, transit
 
 
@@ -45,9 +46,7 @@ def test_waiting_to_done() -> None:
 def test_waiting_to_waiting() -> None:
     """Test waiting to waiting."""
 
-    state_record: StateRecord = StateRecord(
-        state=ParState.WAITING_FOR_SELECTION, round=3
-    )
+    state_record: StateRecord = StateRecord(state=ParState.WAITING_FOR_SELECTION, round=3)
     heartbeat_reply: HeartbeatReply = HeartbeatReply(state=State.STANDBY)
     transit(state_record=state_record, heartbeat_reply=heartbeat_reply)
     assert state_record.lookup() == (ParState.WAITING_FOR_SELECTION, 3)

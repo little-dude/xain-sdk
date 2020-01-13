@@ -30,7 +30,7 @@ jobs:
 
       - name: black
         run: |
-          black --check setup.py xain_sdk tests
+          black --line-length 100 --check setup.py xain_sdk tests
 
       - name: isort
         run: |

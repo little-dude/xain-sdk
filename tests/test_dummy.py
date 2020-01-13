@@ -1,4 +1,5 @@
-def test_dummy():
-    """Add dummy test to setup CI
-    """
-    pass
+"""XAIN SDK dummy test"""
+
+
+def test_dummy() -> None:
+    """Add dummy test to setup CI"""

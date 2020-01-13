@@ -4,9 +4,9 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 from tensorflow import Tensor
-from tensorflow.data import Dataset
-from tensorflow.keras import Input, Model
-from tensorflow.keras.layers import Dense
+from tensorflow.data import Dataset  # pylint: disable=import-error
+from tensorflow.keras import Input, Model  # pylint: disable=import-error
+from tensorflow.keras.layers import Dense  # pylint: disable=import-error
 
 from xain_sdk.participant import Participant as ABCParticipant
 from xain_sdk.participant_state_machine import start_participant
@@ -26,7 +26,7 @@ class Participant(ABCParticipant):
         number_samples: The number of samples in the training dataset.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the custom participant.
 
         The model and the datasets are defined here only for convenience, they might as well be
@@ -54,9 +54,7 @@ class Participant(ABCParticipant):
         )(inputs=hidden_layer)
         self.model: Model = Model(inputs=[input_layer], outputs=[output_layer])
         self.model.compile(
-            optimizer="Adam",
-            loss="categorical_crossentropy",
-            metrics=["categorical_accuracy"],
+            optimizer="Adam", loss="categorical_crossentropy", metrics=["categorical_accuracy"],
         )
         # define the number of samples in the training dataset
         self.number_samples: int = 80
@@ -66,9 +64,7 @@ class Participant(ABCParticipant):
             Dataset.from_tensor_slices(
                 tensors=(
                     np.ones(shape=(80, 10), dtype=np.float32),
-                    np.concatenate(
-                        [np.eye(N=2, M=2, dtype=np.float32) for _ in range(40)]
-                    ),
+                    np.concatenate([np.eye(N=2, M=2, dtype=np.float32) for _ in range(40)]),
                 )
             )
             .shuffle(buffer_size=80)
@@ -89,8 +85,7 @@ class Participant(ABCParticipant):
 
     def train_round(  # pylint: disable=unused-argument
         self, weights: List[np.ndarray], epochs: int, epoch_base: int
-    ) -> Tuple[List[np.ndarray], int, Dict[str, List[np.ndarray]]]:
-        # pylint: disable=line-too-long
+    ) -> Tuple[List[np.ndarray], int, Dict[str, np.ndarray]]:
         """Train the model in a federated learning round.
 
         A global model is given in terms of its `weights` and it is trained on local data for a
@@ -104,32 +99,32 @@ class Participant(ABCParticipant):
                 dependent optimizer parameters).
 
         Returns:
-            ~typing.Tuple[~typing.List[~numpy.ndarray], int, ~typing.Dict[str, ~typing.List[~numpy.ndarray]]]:
-                The updated model weights, the number of training samples and the gathered metrics.
+            ~typing.Tuple[~typing.List[~numpy.ndarray], int, ~typing.Dict[str, ~numpy.ndarray]]: The
+                updated model weights, the number of training samples and the gathered metrics.
         """
-        # pylint: enable=line-too-long
 
         # load the weights of the global model into the local model
         self.model.set_weights(weights)
 
         # train the local model for the specified number of epochs and gather the metrics
-        metrics: Dict[str, List[np.ndarray]] = {
-            metric_name: [] for metric_name in self.model.metrics_names
-        }
+        metrics_per_epoch: List[List[np.ndarray]] = []
         for _ in range(epochs):
             self.model.fit(x=self.trainset, verbose=2, shuffle=False)
-            for metric_name, metric in zip(
-                self.model.metrics_names, self.model.evaluate(x=self.valset, verbose=0)
-            ):
-                metrics[metric_name].append(metric)
+            metrics_per_epoch.append(self.model.evaluate(x=self.valset, verbose=0))
+        metrics: Dict[str, np.ndarray] = {
+            name: np.stack(np.atleast_1d(*metric))
+            for name, metric in zip(self.model.metrics_names, zip(*metrics_per_epoch))
+        }
 
-        # return the updated weights of the local model, the number of train samples and the gathered metrics
+        # return the updated model weights, the number of train samples and the gathered metrics
         return self.model.get_weights(), self.number_samples, metrics
 
 
-def main():
-    p = Participant()
-    start_participant(p, "127.0.0.1:50051")
+def main() -> None:
+    """Entry point to start a participant."""
+
+    participant: Participant = Participant()
+    start_participant(participant, "127.0.0.1:50051")
 
 
 if __name__ == "__main__":

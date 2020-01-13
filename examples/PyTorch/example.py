@@ -1,16 +1,14 @@
+"""PyTorch example for the SDK Participant implementation."""
+
 from typing import Dict, List, Tuple
 
 import numpy as np
-import torch as torch
-import torchvision as torchvision
-import torch.utils as utils
-import torchvision.transforms as transforms
-import random
-
-from xain_sdk.participant import Participant as ABCParticipant
-from xain_sdk.participant_state_machine import start_participant
+from torch import utils
+from torchvision import datasets, transforms
 
 from cnn_class import Net
+from xain_sdk.participant import Participant as ABCParticipant
+from xain_sdk.participant_state_machine import start_participant
 
 
 class Participant(ABCParticipant):
@@ -40,24 +38,21 @@ class Participant(ABCParticipant):
         # define or load a model to be trained
 
         transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-            ]
+            [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),]
         )
 
-        self.trainset = torchvision.datasets.CIFAR10(
+        self.trainset = datasets.CIFAR10(
             root="./data", train=True, download=True, transform=transform
         )
 
-        self.trainloader = torch.utils.data.DataLoader(
+        self.trainloader = utils.data.DataLoader(
             self.trainset, batch_size=4, shuffle=True, num_workers=2
         )
 
-        self.testset = torchvision.datasets.CIFAR10(
+        self.testset = datasets.CIFAR10(
             root="./data", train=False, download=True, transform=transform
         )
-        self.testloader = torch.utils.data.DataLoader(
+        self.testloader = utils.data.DataLoader(
             self.testset, batch_size=4, shuffle=False, num_workers=2
         )
         self.model = Net()
@@ -66,31 +61,40 @@ class Participant(ABCParticipant):
 
     def train_round(  # pylint: disable=unused-argument
         self, weights: List[np.ndarray], epochs: int, epoch_base: int
-    ) -> Tuple[List[np.ndarray], int, Dict[str, List[np.ndarray]]]:
-        # pylint: disable=line-too-long
+    ) -> Tuple[List[np.ndarray], int, Dict[str, np.ndarray]]:
         """Train the model in a federated learning round.
+
         A global model is given in terms of its `weights` and it is trained on local data for a
         number of `epochs`. The weights of the updated local model are returned together with the
         number of samples in the training dataset and a set of metrics.
+
         Args:
             weights (~typing.List[~numpy.ndarray]): The weights of the global model.
             epochs (int): The number of epochs to be trained.
             epoch_base (int): The epoch base number for the optimizer state (in case of epoch
                 dependent optimizer parameters).
+
         Returns:
-            ~typing.Tuple[~typing.List[~numpy.ndarray], int, ~typing.Dict[str, ~typing.List[~numpy.ndarray]]]:
-                The updated model weights, the number of training samples and the gathered metrics.
+            ~typing.Tuple[~typing.List[~numpy.ndarray], int, ~typing.Dict[str, ~numpy.ndarray]]: The
+                updated model weights, the number of training samples and the gathered metrics.
         """
+
         self.model.read_from_vector(self.indices, weights, self.shapes)
         self.model.train_n_epochs(self.trainloader, epochs)
         self.flattened, self.shapes, self.indices = self.model.flatten_weights()
 
-        metrics: Dict[str, List[np.ndarray]] = {}
+        # TODO: return metric values from `train_n_epochs` and update the dict accordingly
+        metrics: Dict[str, np.ndarray] = {}
 
         return self.flattened, self.number_samples, metrics
 
 
-if __name__ == "__main__":
-    p = Participant()
+def main() -> None:
+    """Entry point to start a participant."""
 
-    start_participant(p, coordinator_url="localhost:50051")
+    participant: Participant = Participant()
+    start_participant(participant, coordinator_url="localhost:50051")
+
+
+if __name__ == "__main__":
+    main()
