@@ -355,6 +355,21 @@ def begin_training(state_record: StateRecord, channel: Channel, participant: Par
 
     # move to POST_TRAINING state
     state_record.update(state=ParState.POST_TRAINING)
+    begin_post_training(state_record, channel, participant)
+
+
+def begin_post_training(
+    state_record: StateRecord, channel: Channel, participant: Participant
+) -> None:
+    """Perform actions in the Participant state POST_TRAINING.
+
+    Args:
+        state_record (~xain_sdk.participant_state_machine.StateRecord): The participant's state
+            record.
+        channel (~grpc.Channel): A gRPC channel to the coordinator.
+        participant (~xain_sdk.participant.Participant): The participant for local training.
+    """
+
     state: ParState = state_record.wait_until_next_round()
     if state == ParState.TRAINING:
         # selected again

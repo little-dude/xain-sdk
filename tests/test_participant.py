@@ -1,8 +1,16 @@
 """Tests for GRPC Participant."""
 
+from unittest import mock
+
 from xain_proto.fl.coordinator_pb2 import HeartbeatReply, State
 
-from xain_sdk.participant_state_machine import ParState, StateRecord, transit
+from xain_sdk.participant_state_machine import (
+    ParState,
+    StateRecord,
+    begin_post_training,
+    begin_selection_wait,
+    transit,
+)
 
 
 def test_from_start() -> None:
@@ -137,3 +145,67 @@ def test_restart_round() -> None:
     transit(state_record, heartbeat_reply)
     # => re-do the training...
     assert state_record.lookup() == (ParState.TRAINING, 8)
+
+
+@mock.patch("xain_sdk.participant_state_machine.begin_training")
+def test_selection_wait_done(mock_begin_training):
+    """Test effect of selection-waiting until DONE state."""
+
+    state_rec = StateRecord(state=ParState.DONE)
+    chan, part = mock.MagicMock(), mock.MagicMock()
+    begin_selection_wait(state_rec, chan, part)
+    p_st, _ = state_rec.lookup()
+    assert p_st == ParState.DONE
+    mock_begin_training.assert_not_called()
+
+
+@mock.patch("xain_sdk.participant_state_machine.begin_training")
+def test_selection_wait_training(mock_begin_training):
+    """Test effect of selection-waiting until TRAINING state."""
+
+    state_rec = StateRecord(state=ParState.TRAINING)
+    chan, part = mock.MagicMock(), mock.MagicMock()
+    begin_selection_wait(state_rec, chan, part)
+    mock_begin_training.assert_called_once_with(
+        state_record=state_rec, channel=chan, participant=part
+    )
+
+
+@mock.patch("xain_sdk.participant_state_machine.begin_training")
+@mock.patch("xain_sdk.participant_state_machine.begin_selection_wait")
+def test_post_training_training(mock_begin_selection_wait, mock_begin_training):
+    """Test effect of post-train-waiting until TRAINING state."""
+
+    state_rec = StateRecord(state=ParState.TRAINING)
+    chan, part = mock.MagicMock(), mock.MagicMock()
+    begin_post_training(state_rec, chan, part)
+    mock_begin_training.assert_called_once_with(
+        state_record=state_rec, channel=chan, participant=part
+    )
+    mock_begin_selection_wait.assert_not_called()
+
+
+@mock.patch("xain_sdk.participant_state_machine.begin_training")
+@mock.patch("xain_sdk.participant_state_machine.begin_selection_wait")
+def test_post_training_waiting(mock_begin_selection_wait, mock_begin_training):
+    """Test effect of post-train-waiting until WAITING_FOR_SELECTION state."""
+
+    state_rec = StateRecord(state=ParState.WAITING_FOR_SELECTION)
+    chan, part = mock.MagicMock(), mock.MagicMock()
+    begin_post_training(state_rec, chan, part)
+    mock_begin_selection_wait.assert_called_once_with(
+        state_record=state_rec, channel=chan, participant=part
+    )
+    mock_begin_training.assert_not_called()
+
+
+@mock.patch("xain_sdk.participant_state_machine.begin_training")
+@mock.patch("xain_sdk.participant_state_machine.begin_selection_wait")
+def test_post_training_done(mock_begin_selection_wait, mock_begin_training):
+    """Test effect of post-train-waiting until DONE state."""
+
+    state_rec = StateRecord(state=ParState.DONE)
+    chan, part = mock.MagicMock(), mock.MagicMock()
+    begin_post_training(state_rec, chan, part)
+    mock_begin_training.assert_not_called()
+    mock_begin_selection_wait.assert_not_called()
