@@ -10,15 +10,15 @@ from numproto import ndarray_to_proto, proto_to_ndarray
 from numproto.protobuf.ndarray_pb2 import NDArray as pndarray
 from numpy import ndarray
 from xain_proto.fl.coordinator_pb2 import (
-    EndTrainingReply,
-    EndTrainingRequest,
-    HeartbeatReply,
+    EndTrainingRoundRequest,
+    EndTrainingRoundResponse,
     HeartbeatRequest,
+    HeartbeatResponse,
     RendezvousReply,
     RendezvousRequest,
     RendezvousResponse,
-    StartTrainingReply,
-    StartTrainingRequest,
+    StartTrainingRoundRequest,
+    StartTrainingRoundResponse,
     State,
 )
 from xain_proto.fl.coordinator_pb2_grpc import CoordinatorStub
@@ -52,21 +52,21 @@ def rendezvous(channel: Channel) -> None:
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
 
-    response: RendezvousResponse = RendezvousResponse.LATER
-    reply: RendezvousReply
-    while response == RendezvousResponse.LATER:
-        reply = coordinator.Rendezvous(request=RendezvousRequest())
-        if reply.response == RendezvousResponse.ACCEPT:
+    reply: RendezvousReply = RendezvousReply.LATER
+    response: RendezvousResponse
+    while reply == RendezvousReply.LATER:
+        response = coordinator.Rendezvous(request=RendezvousRequest())
+        if response.reply == RendezvousReply.ACCEPT:
             logger.info("Participant received: ACCEPT")
-        elif reply.response == RendezvousResponse.LATER:
+        elif response.reply == RendezvousReply.LATER:
             logger.info("Participant received: LATER. Retrying...", retry_timeout=RETRY_TIMEOUT)
             time.sleep(RETRY_TIMEOUT)
 
-        response = reply.response
+        reply = response.reply
 
 
-def start_training(channel: Channel) -> Tuple[List[ndarray], int, int]:
-    """Start a training initiation exchange with a coordinator.
+def start_training_round(channel: Channel) -> Tuple[List[ndarray], int, int]:
+    """Start a training round initiation exchange with a coordinator.
 
     The decoded contents of the response from the coordinator are returned.
 
@@ -82,20 +82,22 @@ def start_training(channel: Channel) -> Tuple[List[ndarray], int, int]:
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
 
     # send request to start training
-    reply: StartTrainingReply = coordinator.StartTraining(request=StartTrainingRequest())
-    logger.info("Participant received", reply_type=type(reply))
+    response: StartTrainingRoundResponse = coordinator.StartTrainingRound(
+        request=StartTrainingRoundRequest()
+    )
+    logger.info("Participant received", response_type=type(response))
 
-    weights: List[ndarray] = [proto_to_ndarray(weight) for weight in reply.weights]
-    epochs: int = reply.epochs
-    epoch_base: int = reply.epoch_base
+    weights: List[ndarray] = [proto_to_ndarray(weight) for weight in response.weights]
+    epochs: int = response.epochs
+    epoch_base: int = response.epoch_base
 
     return weights, epochs, epoch_base
 
 
-def end_training(
+def end_training_round(
     channel: Channel, weights: List[ndarray], number_samples: int, metrics: Dict[str, ndarray],
 ) -> None:
-    """Start a training completion exchange with a coordinator.
+    """Start a training round completion exchange with a coordinator.
 
     The locally trained model weights, the number of samples and the gathered metrics are sent.
 
@@ -117,18 +119,18 @@ def end_training(
     }
 
     # assembling a request with the update of the weights and the metrics
-    request: EndTrainingRequest = EndTrainingRequest(
+    request: EndTrainingRoundRequest = EndTrainingRoundRequest(
         weights=weights_proto, number_samples=number_samples, metrics=metrics_proto
     )
-    reply: EndTrainingReply = coordinator.EndTraining(request=request)
-    logger.info("Participant received", reply_type=type(reply))
+    response: EndTrainingRoundResponse = coordinator.EndTrainingRound(request=request)
+    logger.info("Participant received", response_type=type(response))
 
 
 def training_round(channel: Channel, participant: Participant) -> None:
     """Initiate a training round exchange with a coordinator.
 
-    Begins with `start_training`. Then performs local training computation using the `participant`.
-    Finally, completes with `end_training`.
+    Begins with `start_training_round`. Then performs local training computation using the
+    `participant`. Finally, completes with `end_training_round`.
 
     Args:
         channel (~grpc.Channel): A gRPC channel to the coordinator.
@@ -145,7 +147,7 @@ def training_round(channel: Channel, participant: Participant) -> None:
     weights: List[ndarray]
     epochs: int
     epoch_base: int
-    weights, epochs, epoch_base = start_training(channel=channel)
+    weights, epochs, epoch_base = start_training_round(channel=channel)
 
     # start a local training round of the participant
     number_samples: int
@@ -166,7 +168,9 @@ def training_round(channel: Channel, participant: Participant) -> None:
         raise TypeError("Metrics must be of type `Dict[str, ndarray]`!")
 
     # return updated weights, number of training samples and metrics to the coordinator
-    end_training(channel=channel, weights=weights, number_samples=number_samples, metrics=metrics)
+    end_training_round(
+        channel=channel, weights=weights, number_samples=number_samples, metrics=metrics
+    )
 
 
 class StateRecord:
@@ -235,18 +239,18 @@ class StateRecord:
             return self.state
 
 
-def transit(state_record: StateRecord, heartbeat_reply: HeartbeatReply) -> None:
+def transit(state_record: StateRecord, heartbeat_response: HeartbeatResponse) -> None:
     """Participant state transition function on a heartbeat response. Updates the state record.
 
     Args:
         state_record (~xain_sdk.participant_state_machine.StateRecord): The updatable state record
             of the participant.
-        heartbeat_reply (~xain_proto.fl.coordinator_pb2.HeartbeatReply): The heartbeat reply from
-            the coordinator.
+        heartbeat_response (~xain_proto.fl.coordinator_pb2.HeartbeatResponse): The heartbeat
+            response from the coordinator.
     """
 
-    state: State = heartbeat_reply.state
-    round: int = heartbeat_reply.round  # pylint: disable=redefined-builtin
+    state: State = heartbeat_response.state
+    round: int = heartbeat_response.round  # pylint: disable=redefined-builtin
     with state_record.cond:
         if state_record.state == ParState.WAITING_FOR_SELECTION:
             if state == State.ROUND:
@@ -285,7 +289,7 @@ def message_loop(channel: Channel, state_record: StateRecord, terminate: threadi
     while not terminate.is_set():
         request = HeartbeatRequest()
         transit(
-            state_record=state_record, heartbeat_reply=coordinator.Heartbeat(request=request),
+            state_record=state_record, heartbeat_response=coordinator.Heartbeat(request=request),
         )
         time.sleep(HEARTBEAT_TIME)
 

@@ -29,7 +29,7 @@ install_requires = [
     "numproto~=0.3",  # Apache License 2.0
     "structlog==19.1.0",  # Apache License 2.0 & MIT License
     # TODO: change xain-proto requirement to "xain-proto==0.2.0" once it is released
-    "xain-proto @ git+https://github.com/xainag/xain-proto.git@0e52b2fd1ceabbcccd443b05e2438a9ce0c65178#egg=xain_proto-0.1.0&subdirectory=python",  # Apache License 2.0
+    "xain-proto @ git+https://github.com/xainag/xain-proto.git@master#egg=xain_proto-0.1.0&subdirectory=python",  # Apache License 2.0
 ]
 
 dev_require = [
