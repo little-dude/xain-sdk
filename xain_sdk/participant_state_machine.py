@@ -6,8 +6,6 @@ import time
 from typing import Dict, List, Tuple
 
 from grpc import Channel, insecure_channel
-from numproto import ndarray_to_proto, proto_to_ndarray
-from numproto.protobuf.ndarray_pb2 import NDArray as pndarray
 from numpy import ndarray
 from xain_proto.fl.coordinator_pb2 import (
     EndTrainingRoundRequest,
@@ -22,6 +20,8 @@ from xain_proto.fl.coordinator_pb2 import (
     State,
 )
 from xain_proto.fl.coordinator_pb2_grpc import CoordinatorStub
+from xain_proto.numproto import ndarray_to_proto, proto_to_ndarray
+from xain_proto.numproto.ndarray_pb2 import NDArray as pndarray
 
 from xain_sdk.logger import get_logger
 from xain_sdk.participant import Participant

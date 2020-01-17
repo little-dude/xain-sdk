@@ -26,10 +26,9 @@ install_requires = [
     "typing-extensions~=3.7",  # PSF
     "numpy~=1.15",  # BSD
     "grpcio~=1.23",  # Apache License 2.0
-    "numproto~=0.3",  # Apache License 2.0
     "structlog==19.1.0",  # Apache License 2.0 & MIT License
     # TODO: change xain-proto requirement to "xain-proto==0.2.0" once it is released
-    "xain-proto @ git+https://github.com/xainag/xain-proto.git@c78e86584c205fb56b5c1f03f052e0b623dcd25d#egg=xain_proto-0.1.0&subdirectory=python",  # Apache License 2.0
+    "xain-proto @ git+https://github.com/xainag/xain-proto.git@37fc05566da91d263c37d203c0ba70804960be9b#egg=xain_proto-0.1.0&subdirectory=python",  # Apache License 2.0
 ]
 
 dev_require = [
@@ -46,7 +45,6 @@ dev_require = [
 tests_require = [
     "pytest==4.6.2",  # MIT license
     "pytest-cov==2.7.1",  # MIT
-    "pytest-watch==4.2.0",  # MIT
 ]
 
 docs_require = [
