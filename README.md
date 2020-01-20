@@ -1,4 +1,4 @@
-[![Workflow Lint and test (master)](https://github.com/xainag/xain-sdk/workflows/Lint%20and%20test%20(master)/badge.svg)](https://github.com/xainag/xain-sdk)
+[![Workflow Lint and test (master)](https://github.com/xainag/xain-sdk/workflows/Lint%20and%20test%20%28master%29/badge.svg)](https://github.com/xainag/xain-sdk)
 [![GitHub license](https://img.shields.io/github/license/xainag/xain-sdk)](https://github.com/xainag/xain-sdk/blob/master/LICENSE)
 [![Documentation Status](https://readthedocs.org/projects/xain-sdk/badge/?version=latest)](https://xain-sdk.readthedocs.io/en/latest/)
 [![Gitter chat](https://badges.gitter.im/xainag.png)](https://gitter.im/xainag)
