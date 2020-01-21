@@ -19,3 +19,7 @@ For reference, the possible headings are:
 
 
 ## [Unreleased]
+
+## [0.3.0] - 2020-01-21
+
+The first public release of **xain-sdk**
