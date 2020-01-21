@@ -69,7 +69,7 @@ install_requires = [
     "grpcio~=1.23",  # Apache License 2.0
     "protobuf~=3.9",  # 3-Clause BSD License
     "numproto~=0.3",  # Apache License 2.0
-    "structlog==19.1.0",  # Apache License 2.0 & MIT License
+    "structlog~=19.2",  # Apache License 2.0 & MIT License
 ]
 
 dev_require = [
