@@ -13,14 +13,17 @@ class Participant(ABC):
     def train_round(
         self, weights: List[ndarray], epochs: int, epoch_base: int
     ) -> Tuple[List[ndarray], int, Dict[str, ndarray]]:
-        """Train the model in a federated learning round.
+        """Train a model in a federated learning round.
 
-        A global model is given in terms of its `weights` and it is trained on local data for a
-        number of `epochs`. The weights of the updated local model are returned together with the
-        number of samples in the train dataset and a set of metrics.
+        A model is given in terms of its weights and the model is trained on the participant's
+        dataset for a number of epochs. The weights of the updated model are returned in combination
+        with the number of samples of the train dataset and some gathered metrics.
+
+        If no weights are given (i.e. an empty list of weights), then the participant is expected to
+        initialize the weights according to its model definition and return them without training.
 
         Args:
-            weights (~typing.List[~numpy.ndarray]): The weights of the global model.
+            weights (~typing.List[~numpy.ndarray]): The weights of the model to be trained.
             epochs (int): The number of epochs to be trained.
             epoch_base (int): The epoch base number for the optimizer state (in case of epoch
                 dependent optimizer parameters).

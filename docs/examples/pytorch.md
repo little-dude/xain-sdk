@@ -10,7 +10,7 @@ Every example contains two steps:
 The first part is described in the [XAIN-fl](https://github.com/xainag/xain-fl) repository. 
 Then we can assume that we have our Coordinator waiting for the Participants to join. 
 The next step is to set up the Participant SDK and equip it with a model. 
-We cover the requirements of the [Participant Abstract Base Class](#participant-abstract-base-class), give ideas on how to handle a PyTorch model and show how to implement a Federated Learning example. You can find the complete [source code](#source-code) at the end of this document.
+We cover the requirements of the [Participant Abstract Base Class](#participant-abstract-base-class), give ideas on how to handle a PyTorch model and show how to implement a Federated Learning example. You can find the complete source code [here](https://github.com/xainag/xain-sdk/blob/master/examples/pytorch/example.py).
 
 The example code makes use of typing to be precise about the expected data types, specifically
 
@@ -43,13 +43,13 @@ def train_round(
 ```
 
 The expected arguments are:
-- `weights (List[np.ndarray])`: A Numpy array containing all the model weights.
-- `epochs (int)`: The number of epochs to be trained during the Federated Learning round.
+- `weights (List[np.ndarray])`: Either a list of Numpy arrays containing the weights of the global model or an empty list. In the latter case the participant must properly initialize the weights instead of loading them.
+- `epochs (int)`: The number of epochs to be trained during the federated learning round. Can be any non-negative number including zero.
 - `epoch_base (int)`: An epoch base number in case the state of the training optimizer is dependent on the overall epoch (e.g. for learning rate schedules).
 
 The expected return values are:
 - `List[np.ndarray]`: The weights of the local model which results from the global model after certain `epochs` of training on local data.
-- `int`: The number of samples in the train dataset for Federated Averaging.
+- `int`: The number of samples in the train dataset used for aggregation strategies.
 - `Dict[str, np.ndarray]`: The metrics gathered during the training. This might be an empty dictionary if the `Coordinator` is not supposed to collect the metrics.
 
 
@@ -169,7 +169,7 @@ These parameters become handy when we need to import parameters from a single Nu
 
 ## PyTorch Training Round
 
-The implementation of the actual `train_round()` method consists of three main steps. First, the provided `weights` of the global model are loaded into the local model, then some number of epochs is trained and as a last step we export the weights to a numpy array.
+The implementation of the actual `train_round()` method consists of three main steps. First, the provided `weights` of the global model are loaded into the local model or they have to be initialized if no weights are present. Then some number of epochs is trained and as a last step we export the weights to a numpy array.
 
 ```python
 def train_round(
@@ -180,18 +180,24 @@ def train_round(
 As mentioned before we want to perform three crucial steps in this method
 
 ```python 
-self.model.read_from_vector(self.indices, weights, self.shapes)
-self.model.train_n_epochs(self.trainloader, epochs)
-self.flattened, self.shapes, self.indices = self.model.flatten_weights()
+if weights:
+    self.model.read_from_vector(self.indices, weights, self.shapes)
+    self.model.train_n_epochs(self.trainloader, epochs)
+    self.flattened, self.shapes, self.indices = self.model.flatten_weights()
 ```
 
 which we defined together with the CNN class. The last step is to calculate matrices that we are interested in our model.
 
 ```python
-print("Training accuracy", self.model.evaluate_on_test(self.testloader))
+number_samples = len(self.trainloader)
+metrics = self.model.evaluate_on_test(self.testloader))
 ```
 
+If there are no weights provided, then the participant initializes new weights according to its model definition and returns them without further training, as
 
-## Source Code
-
-The source code of the example can be found [here](https://github.com/xainag/xain-sdk/blob/master/examples/pytorch/example.py).
+```python
+else:
+    self.init_model()
+    number_samples = 0
+    metrics = {}
+```

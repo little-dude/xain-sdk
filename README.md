@@ -72,21 +72,29 @@ class MyParticipant(Participant):
     def train_round(
         self, weights: List[ndarray], epochs: int, epoch_base: int
     ) -> Tuple[List[ndarray], int, Dict[str, ndarray]]:
-        
-        # define the number of samples in the training dataset
-        number_train_samples: int = 80
-        
-        # load weights into the model
-        ...
 
-        # train the model for the specified number of epochs
-        ...
+        number_samples: int
+        metrics: Dict[str, ndarray]
         
-        # gather the metrics of the trained epochs
-        ...
+        if weights:
+            # load weights into the model
+            ...
 
-        # return the updated weights
-        return weights, number_train_samples, metrics
+            # train the model for the specified number of epochs
+            ...
+            
+            # gather the number of training samples and the metrics of the trained epochs
+            number_samples = ...
+            metrics = ...
+
+        else:
+            # initialize new weights for the model
+            weights = ...
+            number_samples = 0
+            metrics = {}
+
+        # return the updated weights, number of train samples and gathered metrics
+        return weights, number_samples, metrics
 ```
 
 
