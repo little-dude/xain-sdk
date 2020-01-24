@@ -72,7 +72,7 @@ class Participant(ABCParticipant):
 
         if weights:
             # load the weights of the global model into the local model
-            self.model.read_from_vector(self.indices, weights, self.shapes)  # type: ignore
+            self.model.read_from_vector(self.indices, weights[0], self.shapes)  # type: ignore
 
             # train the local model for the specified number of epochs and gather the metrics
             number_samples = len(self.trainloader)
@@ -91,7 +91,7 @@ class Participant(ABCParticipant):
             metrics = {}
 
         # return the updated model weights, the number of train samples and the gathered metrics
-        return self.flattened, number_samples, metrics
+        return [self.flattened], number_samples, metrics
 
     def init_model(self) -> None:
         """Initialize a model."""
