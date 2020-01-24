@@ -103,7 +103,7 @@ and
 def flatten_weights(self) -> [np.ndarray, np.ndarray, np.ndarray]: 
 ```
 
-The last part of our model class is setting the optimizer together with loss function and training loop.
+Note, that the functions for flattening and expanding weights deal with a single numpy array instead of a list of numpy arrays, that means the flattened weights have to be un-/packed from/to a list in the `train_round()` method. The last part of our model class is setting the optimizer together with loss function and training loop.
 
 ```python
 def train_n_epochs(self, trainloader, number_of_epochs: int) -> None:
@@ -181,7 +181,7 @@ As mentioned before we want to perform three crucial steps in this method
 
 ```python 
 if weights:
-    self.model.read_from_vector(self.indices, weights, self.shapes)
+    self.model.read_from_vector(self.indices, weights[0], self.shapes)
     self.model.train_n_epochs(self.trainloader, epochs)
     self.flattened, self.shapes, self.indices = self.model.flatten_weights()
 ```

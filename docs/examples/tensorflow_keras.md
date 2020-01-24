@@ -2,7 +2,7 @@
 
 This is an example of a Tensorflow Keras implementation of a `Participant` for federated learning.
 
-We cover the requirements of the [Participant Abstract Base Class](#participant-abstract-base-class), give ideas on how to handle a [Keras Model](#keras-model) and [Keras Data](#keras-data) in the `Participant`, and show how to implement a federated learning [Keras Training Round](#keras-training-round). You can find the complete source code [here](https://github.com/xainag/xain-sdk/blob/master/examples/tensorflow_keras/example.py).
+We cover the requirements of the [Participant Abstract Base Class](#participant-abstract-base-class), give ideas on how to handle a [TF Keras Model](#tf-keras-model) and [TF Keras Data](#tf-keras-data) in the `Participant`, and show how to implement a federated learning [TF Keras Training Round](#tf-keras-training-round). You can find the complete source code [here](https://github.com/xainag/xain-sdk/blob/master/examples/tensorflow_keras/example.py).
 
 The example code makes use of typing to be precise about the expected data types, specifically
 
@@ -46,9 +46,9 @@ The expected return values are:
 - `Dict[str, np.ndarray]`: The metrics gathered during the training. This might be an empty dictionary if the `Coordinator` is not supposed to collect the metrics.
 
 
-## Keras Model
+## TF Keras Model
 
-A Keras model might either be loaded from a file, generated during the initialization of the `Participant`, or even generated on the fly in a `train_round()`. Here, we present a simple dense neural network for classification generated during the `Participant`'s initialization. We make use of the Keras components
+A TF Keras model might either be loaded from a file, generated during the initialization of the `Participant`, or even generated on the fly in a `train_round()`. Here, we present a simple dense neural network for classification generated during the `Participant`'s initialization. We make use of the TF Keras components
 
 ```python
 from tensorflow import Tensor
@@ -97,7 +97,7 @@ self.model.compile(
 ```
 
 
-## Keras Data
+## TF Keras Data
 
 The data on which the model will be trained, can either be loaded from a data source (e.g. file, bucket, data base) during the initialization of the `Participant` or on the fly in a `train_round()`. Here, we employ randomly generated placeholder data as an example. This is by no means a meaningful dataset, but it should be sufficient to convey the overall idea. The dataset for training gets shuffled and batched, like
 
@@ -119,7 +119,7 @@ self.testset: Dataset = Dataset.from_tensor_slices(
 ```
 
 
-## Keras Training Round
+## TF Keras Training Round
 
 The implementation of the actual `train_round()` method consists of three main steps. First, the provided `weights` of the global model are loaded into the local model, as
 

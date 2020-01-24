@@ -1,6 +1,6 @@
-# Tensorflow Keras Participant Example
+# PyTorch Participant Example
 
-You can find the explanation of the example [here](https://xain-sdk.readthedocs.io/en/latest/examples/tensorflow_keras.html).
+You can find the explanation of the example [here](https://xain-sdk.readthedocs.io/en/latest/examples/pytorch.html).
 
 
 ## Install
@@ -8,9 +8,9 @@ You can find the explanation of the example [here](https://xain-sdk.readthedocs.
 ```shell
 # If you don't have the xain-sdk package installed on your system yet, install it with pip first.
 pip install -e .
-cd examples/tensorflow_keras
+cd examples/pytorch
 
-# Install the requirements to run the tensorflow keras example.
+# Install the requirements to run the pytorch example.
 pip install -r requirements.txt
 ```
 
