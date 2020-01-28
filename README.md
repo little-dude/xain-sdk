@@ -143,6 +143,12 @@ Please see the following examples showing how to implement your Participant with
 - [Keras/Tensorflow example for the SDK Participant implementation](https://xain-sdk.readthedocs.io/en/latest/examples/tensorflow_keras.html)
 - [PyTorch example for the SDK Participant implementation](https://xain-sdk.readthedocs.io/en/latest/examples/pytorch.html)
 
+### Testing
+
+You can connect multiple participants at once running in parallel to a coordinator with the following script:
+
+[Bash script for starting multiple participants](https://github.com/xainag/xain-sdk/tree/master/examples#start-multiple-participants-in-parallel)
+
 
 ## Getting help
 
