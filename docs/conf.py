@@ -34,6 +34,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
+    "sphinx_autodoc_typehints",
 ]
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
@@ -80,6 +81,8 @@ html_static_path = ["_static"]
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://docs.scipy.org/doc/numpy/", None),
+    "structlog": ("http://www.structlog.org/en/stable/", None),
+    "grpc": ("https://grpc.github.io/grpc/python/", None),
 }
 
 

@@ -49,6 +49,7 @@ tests_require = [
 docs_require = [
     "Sphinx==2.2.1",
     "m2r==0.2.1",
+    "sphinx-autodoc-typehints==1.10.3",  # MIT
 ]
 
 setup(

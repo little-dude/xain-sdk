@@ -47,7 +47,7 @@ def rendezvous(channel: Channel) -> None:
     """Start a rendezvous exchange with a coordinator.
 
     Args:
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
+        channel: A gRPC channel to the coordinator.
     """
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
@@ -71,12 +71,14 @@ def start_training_round(channel: Channel) -> Tuple[List[ndarray], int, int]:
     The decoded contents of the response from the coordinator are returned.
 
     Args:
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
+        channel: A gRPC channel to the coordinator.
 
     Returns:
-        ~typing.List[~numpy.ndarray]: The weights of a global model to train on.
-        int: The number of epochs to train.
-        int: The epoch base of the global model.
+
+        A tuple ``(weights, epochs, epoch_base)`` where ``weights`` is
+        the weights of a global model to train on, ``epochs`` is the
+        number of epochs to train, and ``epoch_base`` is the epoch base
+        of the global model.
     """
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
@@ -102,10 +104,10 @@ def end_training_round(
     The locally trained model weights, the number of samples and the gathered metrics are sent.
 
     Args:
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        weights (~typing.List[~numpy.ndarray]): The weights of the locally trained model.
-        number_samples (int): The number of samples in the training dataset.
-        metrics (~typing.Dict[str, ~numpy.ndarray]): Metrics data.
+        channel: A gRPC channel to the coordinator.
+        weights: The weights of the locally trained model.
+        number_samples: The number of samples in the training dataset.
+        metrics: Metrics data.
     """
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
@@ -133,8 +135,8 @@ def training_round(channel: Channel, participant: Participant) -> None:
     `participant`. Finally, completes with `end_training_round`.
 
     Args:
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        participant (~xain_sdk.participant.Participant): The local participant.
+        channel: A gRPC channel to the coordinator.
+        participant: The local participant.
 
     Raises:
         TypeError: If the model weights received from the participant's local training round are not
@@ -182,9 +184,8 @@ class StateRecord:
         """Initialize the state record.
 
         Args:
-            state (~xain_sdk.participant_state_machine.ParState): The initial state. Defaults to
-                WAITING_FOR_SELECTION.
-            round (int): The initial training round. Defaults to 0.
+            state: The initial state. Defaults to `WAITING_FOR_SELECTION`.
+            round: The initial training round. Defaults to 0.
         """
 
         self.cond: threading.Condition = threading.Condition()
@@ -195,8 +196,7 @@ class StateRecord:
         """Get the state and round number.
 
         Returns:
-            ~typing.Tuple[~xain_sdk.participant_state_machine.ParState, int]: The state and round
-                number.
+            The state and round number.
         """
 
         with self.cond:
@@ -206,7 +206,7 @@ class StateRecord:
         """Update the state.
 
         Args:
-            state (~xain_sdk.participant_state_machine.ParState): The state to update to.
+            state: The state to update to.
         """
 
         with self.cond:
@@ -217,7 +217,7 @@ class StateRecord:
         """Wait until the participant was selected for training or is done.
 
         Returns:
-            ~xain_sdk.participant_state_machine.ParState: The new state the participant is in.
+            The new state the participant is in.
         """
 
         with self.cond:
@@ -228,7 +228,7 @@ class StateRecord:
         """Wait until the participant can start into the next round of training.
 
         Returns:
-            ~xain_sdk.participant_state_machine.ParState: The new state the participant is in.
+            The new state the participant is in.
         """
 
         with self.cond:
@@ -243,10 +243,8 @@ def transit(state_record: StateRecord, heartbeat_response: HeartbeatResponse) ->
     """Participant state transition function on a heartbeat response. Updates the state record.
 
     Args:
-        state_record (~xain_sdk.participant_state_machine.StateRecord): The updatable state record
-            of the participant.
-        heartbeat_response (~xain_proto.fl.coordinator_pb2.HeartbeatResponse): The heartbeat
-            response from the coordinator.
+        state_record: The updatable state record of the participant.
+        heartbeat_response: The heartbeat response from the coordinator.
     """
 
     state: State = heartbeat_response.state
@@ -279,10 +277,9 @@ def message_loop(channel: Channel, state_record: StateRecord, terminate: threadi
     """Periodically send (and handle) heartbeat messages in a loop.
 
     Args:
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        state_record (~xain_sdk.participant_state_machine.StateRecord): The participant's state
-            record.
-        terminate (~threading.Event): An event to terminate the message loop.
+        channel: A gRPC channel to the coordinator.
+        state_record: The participant's state record.
+        terminate: An event to terminate the message loop.
     """
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
@@ -297,13 +294,16 @@ def message_loop(channel: Channel, state_record: StateRecord, terminate: threadi
 def start_participant(participant: Participant, coordinator_url: str) -> None:
     """Top-level function for the participant's state machine.
 
-    After rendezvous and heartbeat initiation, the Participant is WAITING_FOR_SELECTION. When
-    selected, it moves to TRAINING followed by POST_TRAINING. If selected again for the next round,
-    it moves back to TRAINING, otherwise it is back to WAITING_FOR_SELECTION.
+    After rendezvous and heartbeat initiation, the Participant is
+    ``WAITING_FOR_SELECTION``. When selected, it moves to ``TRAINING``
+    followed by ``POST_TRAINING``. If selected again for the next
+    round, it moves back to ``TRAINING``, otherwise it is back to
+    ``WAITING_FOR_SELECTION``.
 
     Args:
-        participant (~xain_sdk.participant.Participant): The participant for local training.
-        coordinator_url (str): The URL of the coordinator to connect to.
+        participant: The participant for local training.
+        coordinator_url: The URL of the coordinator to connect to.
+
     """
 
     # use insecure channel for now
@@ -330,10 +330,9 @@ def begin_selection_wait(
     """Perform actions in Participant state WAITING_FOR_SELECTION.
 
     Args:
-        state_record (~xain_sdk.participant_state_machine.StateRecord): The participant's state
-            record.
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        participant (~xain_sdk.participant.Participant): The participant for local training.
+        state_record: The participant's state record.
+        channel: A gRPC channel to the coordinator.
+        participant: The participant for local training.
     """
 
     state: ParState = state_record.wait_until_selected_or_done()
@@ -348,10 +347,9 @@ def begin_training(state_record: StateRecord, channel: Channel, participant: Par
     """Perform actions in Participant state TRAINING and POST_TRAINING.
 
     Args:
-        state_record (~xain_sdk.participant_state_machine.StateRecord): The participant's state
-            record.
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        participant (~xain_sdk.participant.Participant): The participant for local training.
+        state_record: The participant's state record.
+        channel: A gRPC channel to the coordinator.
+        participant: The participant for local training.
     """
 
     # perform the training procedures
@@ -368,10 +366,9 @@ def begin_post_training(
     """Perform actions in the Participant state POST_TRAINING.
 
     Args:
-        state_record (~xain_sdk.participant_state_machine.StateRecord): The participant's state
-            record.
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        participant (~xain_sdk.participant.Participant): The participant for local training.
+        state_record: The participant's state record.
+        channel: A gRPC channel to the coordinator.
+        participant: The participant for local training.
     """
 
     state: ParState = state_record.wait_until_next_round()

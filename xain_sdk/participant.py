@@ -23,12 +23,13 @@ class Participant(ABC):
         initialize the weights according to its model definition and return them without training.
 
         Args:
-            weights (~typing.List[~numpy.ndarray]): The weights of the model to be trained.
-            epochs (int): The number of epochs to be trained.
-            epoch_base (int): The epoch base number for the optimizer state (in case of epoch
+            weights: The weights of the model to be trained.
+            epochs: The number of epochs to be trained.
+            epoch_base: The epoch base number for the optimizer state (in case of epoch
                 dependent optimizer parameters).
 
         Returns:
-            ~typing.Tuple[~typing.List[~numpy.ndarray], int, ~typing.Dict[str, ~numpy.ndarray]]: The
-                updated model weights, the number of training samples and the gathered metrics.
+            The updated model weights, the number of training samples
+            and the gathered metrics.
+
         """
