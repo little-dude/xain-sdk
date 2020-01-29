@@ -37,9 +37,8 @@ HEARTBEAT_TIME: int = 10
 class ParState(Enum):
     """Enumeration of Participant states."""
 
-    WAITING_FOR_SELECTION: auto = auto()
+    WAITING: auto = auto()
     TRAINING: auto = auto()
-    POST_TRAINING: auto = auto()
     DONE: auto = auto()
 
 
@@ -179,13 +178,13 @@ class StateRecord:
     """Thread-safe record of a participant's state and round number."""
 
     def __init__(  # pylint: disable=redefined-builtin
-        self, state: ParState = ParState.WAITING_FOR_SELECTION, round: int = 0
+        self, state: ParState = ParState.WAITING, round: int = -1
     ) -> None:
         """Initialize the state record.
 
         Args:
-            state: The initial state. Defaults to `WAITING_FOR_SELECTION`.
-            round: The initial training round. Defaults to 0.
+            state: The initial state. Defaults to WAITING.
+            round: The initial training round. Defaults to -1.
         """
 
         self.cond: threading.Condition = threading.Condition()
@@ -224,20 +223,6 @@ class StateRecord:
             self.cond.wait_for(lambda: self.state in {ParState.TRAINING, ParState.DONE})
             return self.state
 
-    def wait_until_next_round(self) -> ParState:
-        """Wait until the participant can start into the next round of training.
-
-        Returns:
-            The new state the participant is in.
-        """
-
-        with self.cond:
-            self.cond.wait_for(
-                lambda: self.state
-                in {ParState.TRAINING, ParState.WAITING_FOR_SELECTION, ParState.DONE}
-            )
-            return self.state
-
 
 def transit(state_record: StateRecord, heartbeat_response: HeartbeatResponse) -> None:
     """Participant state transition function on a heartbeat response. Updates the state record.
@@ -247,30 +232,39 @@ def transit(state_record: StateRecord, heartbeat_response: HeartbeatResponse) ->
         heartbeat_response: The heartbeat response from the coordinator.
     """
 
-    state: State = heartbeat_response.state
-    round: int = heartbeat_response.round  # pylint: disable=redefined-builtin
+    msg: State = heartbeat_response.state
+    global_round: int = heartbeat_response.round
     with state_record.cond:
-        if state_record.state == ParState.WAITING_FOR_SELECTION:
-            if state == State.ROUND:
+        if state_record.state == ParState.WAITING:
+            if msg == State.ROUND and global_round > state_record.round:
                 state_record.state = ParState.TRAINING
-                state_record.round = round
+                state_record.round = global_round
                 state_record.cond.notify()
-            elif state == State.FINISHED:
+                logger.info(
+                    "Transition to training state",
+                    local_state=state_record.state,
+                    local_round=state_record.round,
+                )
+            elif msg == State.FINISHED:
                 state_record.state = ParState.DONE
                 state_record.cond.notify()
-        elif state_record.state == ParState.POST_TRAINING:
-            if state == State.STANDBY:
-                # not selected
-                state_record.state = ParState.WAITING_FOR_SELECTION
-                # prob ok to keep state_record.round as it is
-                state_record.cond.notify()
-            elif state == State.ROUND and round == state_record.round + 1:
-                state_record.state = ParState.TRAINING
-                state_record.round = round
-                state_record.cond.notify()
-            elif state == State.FINISHED:
-                state_record.state = ParState.DONE
-                state_record.cond.notify()
+                logger.info(
+                    "Transition to finished state", local_state=state_record.state,
+                )
+            elif msg == State.STANDBY or msg == State.ROUND and global_round == state_record.round:
+                logger.debug(
+                    "Continue in waiting state",
+                    local_round=state_record.round,
+                    heartbeat_message=msg,
+                    heartbeat_round=global_round,
+                )
+            else:
+                logger.warn(
+                    "Unexpected heartbeat response",
+                    local_round=state_record.round,
+                    heartbeat_message=msg,
+                    heartbeat_round=global_round,
+                )
 
 
 def message_loop(channel: Channel, state_record: StateRecord, terminate: threading.Event) -> None:
@@ -294,20 +288,18 @@ def message_loop(channel: Channel, state_record: StateRecord, terminate: threadi
 def start_participant(participant: Participant, coordinator_url: str) -> None:
     """Top-level function for the participant's state machine.
 
-    After rendezvous and heartbeat initiation, the Participant is
-    ``WAITING_FOR_SELECTION``. When selected, it moves to ``TRAINING``
-    followed by ``POST_TRAINING``. If selected again for the next
-    round, it moves back to ``TRAINING``, otherwise it is back to
-    ``WAITING_FOR_SELECTION``.
+    After rendezvous and heartbeat initiation, the Participant is WAITING. If
+    selected to train for the current round, it moves to TRAINING, otherwise it
+    remains in WAITING. After training is complete for the round, it moves back
+    to WAITING. When there is no more training to be done, it moves to the
+    terminal state DONE.
 
     Args:
         participant: The participant for local training.
         coordinator_url: The URL of the coordinator to connect to.
-
     """
 
     # use insecure channel for now
-
     with insecure_channel(target=coordinator_url) as channel:  # thread-safe
         rendezvous(channel=channel)
 
@@ -316,18 +308,18 @@ def start_participant(participant: Participant, coordinator_url: str) -> None:
         msg_loop = threading.Thread(target=message_loop, args=(channel, state_record, terminate))
         msg_loop.start()
 
-        # in WAITING_FOR_SELECTION state
-        begin_selection_wait(state_record=state_record, channel=channel, participant=participant)
+        # in WAITING state
+        logger.info("rendezvous successful, begin WAITING...")
+        begin_waiting(state_record, channel, participant)
 
-        # possibly several training rounds later... in DONE state
+        # in DONE state
+        logger.info("shutting down participant...")
         terminate.set()
         msg_loop.join()
 
 
-def begin_selection_wait(
-    state_record: StateRecord, channel: Channel, participant: Participant
-) -> None:
-    """Perform actions in Participant state WAITING_FOR_SELECTION.
+def begin_waiting(state_record: StateRecord, channel: Channel, participant: Participant) -> None:
+    """"Perform actions in the Participant state WAITING.
 
     Args:
         state_record: The participant's state record.
@@ -336,15 +328,17 @@ def begin_selection_wait(
     """
 
     state: ParState = state_record.wait_until_selected_or_done()
-    if state == ParState.TRAINING:
-        # selected
-        begin_training(state_record=state_record, channel=channel, participant=participant)
+    if state == ParState.TRAINING:  # selected
+        logger.debug("received TRAINING signal")
+        begin_training(state_record, channel, participant)
     elif state == ParState.DONE:
-        pass
+        logger.info("received DONE signal")
+    else:
+        logger.warn("received unknown signal", state_signal=state)
 
 
 def begin_training(state_record: StateRecord, channel: Channel, participant: Participant) -> None:
-    """Perform actions in Participant state TRAINING and POST_TRAINING.
+    """Perform actions in the Participant state TRAINING.
 
     Args:
         state_record: The participant's state record.
@@ -352,32 +346,10 @@ def begin_training(state_record: StateRecord, channel: Channel, participant: Par
         participant: The participant for local training.
     """
 
-    # perform the training procedures
-    training_round(channel=channel, participant=participant)
+    # perform training comms and computation
+    training_round(channel, participant)
 
-    # move to POST_TRAINING state
-    state_record.update(state=ParState.POST_TRAINING)
-    begin_post_training(state_record, channel, participant)
-
-
-def begin_post_training(
-    state_record: StateRecord, channel: Channel, participant: Participant
-) -> None:
-    """Perform actions in the Participant state POST_TRAINING.
-
-    Args:
-        state_record: The participant's state record.
-        channel: A gRPC channel to the coordinator.
-        participant: The participant for local training.
-    """
-
-    state: ParState = state_record.wait_until_next_round()
-    if state == ParState.TRAINING:
-        # selected again
-        begin_training(state_record=state_record, channel=channel, participant=participant)
-    elif state == ParState.WAITING_FOR_SELECTION:
-        # not this time
-        begin_selection_wait(state_record=state_record, channel=channel, participant=participant)
-    elif state == ParState.DONE:
-        # that was the last round
-        pass
+    # internal transition back to WAITING
+    logger.debug("trained round, going back to WAITING...")
+    state_record.update(ParState.WAITING)
+    begin_waiting(state_record, channel, participant)
