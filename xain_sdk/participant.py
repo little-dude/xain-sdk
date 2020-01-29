@@ -5,6 +5,8 @@ from typing import Dict, List, Tuple
 
 from numpy import ndarray
 
+from xain_sdk.store import AbstractStore
+
 
 class Participant(ABC):
     """An abstract participant for federated learning."""
@@ -33,3 +35,31 @@ class Participant(ABC):
             and the gathered metrics.
 
         """
+
+
+class InternalParticipant:
+    """Internal representation of a participant that encapsulates the
+    user-defined Participant class.
+
+    Args:
+
+        participant: user provided implementation of a participant
+        store: client for a storage service
+
+    """
+
+    def __init__(self, participant: Participant, store: AbstractStore):
+        self.participant = participant
+        self.store = store
+
+    def train_round(
+        self, weights: List[ndarray], epochs: int, epoch_base: int
+    ) -> Tuple[List[ndarray], int, Dict[str, ndarray]]:
+        """:py:meth:`~xain_sdk.participant.Participant.train_round` wrapper
+
+        """
+        return self.participant.train_round(weights, epochs, epoch_base)
+
+    def write_weights(self, round: int, weights: List[ndarray]) -> None:
+        """:py:meth:`~xain_sdk.store.AbstractStore.write_weights` wrapper"""
+        return self.store.write_weights(round, weights)

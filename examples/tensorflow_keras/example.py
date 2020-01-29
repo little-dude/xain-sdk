@@ -10,6 +10,7 @@ from tensorflow.keras.layers import Dense  # pylint: disable=import-error
 
 from xain_sdk.participant import Participant as ABCParticipant
 from xain_sdk.participant_state_machine import start_participant
+from xain_sdk.store import StorageConfig
 
 
 class Participant(ABCParticipant):
@@ -145,7 +146,12 @@ def main() -> None:
     """Entry point to start a participant."""
 
     participant: Participant = Participant()
-    start_participant(participant, "127.0.0.1:50051")
+    storage_config: StorageConfig = StorageConfig(
+        "http://localhost:9000",
+        "minio",
+        "minio123",
+        "xain-fl-temporary-weights")
+    start_participant(participant, "127.0.0.1:50051", storage_config)
 
 
 if __name__ == "__main__":

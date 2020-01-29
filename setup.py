@@ -28,6 +28,7 @@ install_requires = [
     "grpcio~=1.23",  # Apache License 2.0
     "structlog~=19.2",  # Apache License 2.0 & MIT License
     "xain-proto==0.3.0",  # Apache License 2.0
+    "boto3~=1.10",  # Apache License 2.0
 ]
 
 dev_require = [

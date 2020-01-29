@@ -3,7 +3,7 @@
 from enum import Enum, auto
 import threading
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from grpc import Channel, insecure_channel
 from numpy import ndarray
@@ -24,7 +24,8 @@ from xain_proto.numproto import ndarray_to_proto, proto_to_ndarray
 from xain_proto.numproto.ndarray_pb2 import NDArray as pndarray
 
 from xain_sdk.logger import get_logger
-from xain_sdk.participant import Participant
+from xain_sdk.participant import InternalParticipant, Participant
+from xain_sdk.store import AbstractStore, DummyStore, S3StorageConfig, S3Store
 
 logger = get_logger(__name__)
 
@@ -127,7 +128,7 @@ def end_training_round(
     logger.info("Participant received", response_type=type(response))
 
 
-def training_round(channel: Channel, participant: Participant) -> None:
+def training_round(channel: Channel, participant: InternalParticipant, round: int) -> None:
     """Initiate a training round exchange with a coordinator.
 
     Begins with `start_training_round`. Then performs local training computation using the
@@ -136,6 +137,7 @@ def training_round(channel: Channel, participant: Participant) -> None:
     Args:
         channel: A gRPC channel to the coordinator.
         participant: The local participant.
+        round: round number.
 
     Raises:
         TypeError: If the model weights received from the participant's local training round are not
@@ -167,6 +169,9 @@ def training_round(channel: Channel, participant: Participant) -> None:
     is_not_ndarray_metrics: bool = not all(isinstance(value, ndarray) for value in metrics.values())
     if is_not_dict_metrics or is_not_str_metrics or is_not_ndarray_metrics:
         raise TypeError("Metrics must be of type `Dict[str, ndarray]`!")
+
+    logger.info("Storing weights", round=round)
+    participant.write_weights(round, weights)
 
     # return updated weights, number of training samples and metrics to the coordinator
     end_training_round(
@@ -285,7 +290,11 @@ def message_loop(channel: Channel, state_record: StateRecord, terminate: threadi
         time.sleep(HEARTBEAT_TIME)
 
 
-def start_participant(participant: Participant, coordinator_url: str) -> None:
+def start_participant(
+    participant: Participant,
+    coordinator_url: str,
+    storage_config: Optional[S3StorageConfig] = None,
+) -> None:
     """Top-level function for the participant's state machine.
 
     After rendezvous and heartbeat initiation, the Participant is WAITING. If
@@ -296,8 +305,19 @@ def start_participant(participant: Participant, coordinator_url: str) -> None:
 
     Args:
         participant: The participant for local training.
+        storage_config: The storage configuration
         coordinator_url: The URL of the coordinator to connect to.
     """
+
+    # FIXME(XP-515): the storage feature is highly experimental. In
+    # order to avoid breaking existing setups, we use a dummy store
+    # unless the user provides a valid configuration for using an S3
+    # store.
+    store: AbstractStore = DummyStore()
+    if isinstance(storage_config, S3StorageConfig):
+        store = S3Store(storage_config)
+
+    internal_participant: InternalParticipant = InternalParticipant(participant, store)
 
     # use insecure channel for now
     with insecure_channel(target=coordinator_url) as channel:  # thread-safe
@@ -310,7 +330,7 @@ def start_participant(participant: Participant, coordinator_url: str) -> None:
 
         # in WAITING state
         logger.info("rendezvous successful, begin WAITING...")
-        begin_waiting(state_record, channel, participant)
+        begin_waiting(state_record, channel, internal_participant)
 
         # in DONE state
         logger.info("shutting down participant...")
@@ -318,7 +338,9 @@ def start_participant(participant: Participant, coordinator_url: str) -> None:
         msg_loop.join()
 
 
-def begin_waiting(state_record: StateRecord, channel: Channel, participant: Participant) -> None:
+def begin_waiting(
+    state_record: StateRecord, channel: Channel, participant: InternalParticipant
+) -> None:
     """"Perform actions in the Participant state WAITING.
 
     Args:
@@ -337,7 +359,9 @@ def begin_waiting(state_record: StateRecord, channel: Channel, participant: Part
         logger.warn("received unknown signal", state_signal=state)
 
 
-def begin_training(state_record: StateRecord, channel: Channel, participant: Participant) -> None:
+def begin_training(
+    state_record: StateRecord, channel: Channel, participant: InternalParticipant
+) -> None:
     """Perform actions in the Participant state TRAINING.
 
     Args:
@@ -346,8 +370,9 @@ def begin_training(state_record: StateRecord, channel: Channel, participant: Par
         participant: The participant for local training.
     """
 
+    _, local_round = state_record.lookup()
     # perform training comms and computation
-    training_round(channel, participant)
+    training_round(channel, participant, local_round)
 
     # internal transition back to WAITING
     logger.debug("trained round, going back to WAITING...")

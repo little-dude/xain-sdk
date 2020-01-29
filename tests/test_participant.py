@@ -154,8 +154,8 @@ def test_begin_training(
     state_rec = StateRecord(state=parstate)
     _chan, _part = mock.MagicMock(), mock.MagicMock()
     begin_training(state_rec, _chan, _part)
-    par_state, _ = state_rec.lookup()
+    par_state, round = state_rec.lookup()
 
     assert par_state == ParState.WAITING
-    mock_training_round.assert_called_once_with(_chan, _part)
+    mock_training_round.assert_called_once_with(_chan, _part, round)
     mock_begin_waiting.assert_called_once_with(state_rec, _chan, _part)
