@@ -1,8 +1,7 @@
 """CNN definition for the SDK's PyTorch example"""
 
-from typing import Any, Dict, Tuple, cast
+from typing import Any, cast
 
-import numpy as np
 import torch
 from torch import Tensor, nn, optim
 from torch.nn import functional as F
@@ -76,42 +75,6 @@ class Net(nn.Module):
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
-
-    def flatten_weights(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """[summary]
-
-        .. todo:: Advance docstrings (https://xainag.atlassian.net/browse/XP-425)
-
-        Returns:
-            ~typing.Tuple[~numpy.ndarray, ~numpy.ndarray, ~numpy.ndarray]: [description]
-        """
-
-        flattened: np.ndarray = np.concatenate(list(self.state_dict().values()), axis=None)
-        shapes: np.ndarray = [weights.shape for weights in list(self.state_dict().values())]
-        indices: np.ndarray = np.cumsum([np.prod(shape) for shape in shapes])
-        return flattened, shapes, indices
-
-    def read_from_vector(
-        self, indices: np.ndarray, flattened: np.ndarray, shapes: np.ndarray
-    ) -> None:
-        """[summary]
-
-        .. todo:: Advance docstrings (https://xainag.atlassian.net/browse/XP-425)
-
-        Args:
-            indices (~numpy.ndarray): [description]
-            flattened (~numpy.ndarray): [description]
-            shapes (~numpy.ndarray): [description]
-        """
-
-        model_weights = np.split(flattened, indices_or_sections=indices)
-        model_weights = [
-            np.reshape(weights, newshape=shape) for weights, shape in zip(model_weights, shapes)
-        ]
-        tensors = [torch.from_numpy(a) for a in model_weights]  # pylint: disable=no-member
-        new_state_dict: Dict = dict()
-        new_state_dict.update(zip(self.state_dict().keys(), tensors))
-        self.load_state_dict(new_state_dict)
 
     def evaluate_on_test(self, testloader: Any) -> float:
         """[summary]

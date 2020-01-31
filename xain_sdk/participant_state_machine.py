@@ -3,7 +3,7 @@
 from enum import Enum, auto
 import threading
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from grpc import Channel, insecure_channel
 from numpy import ndarray
@@ -20,8 +20,8 @@ from xain_proto.fl.coordinator_pb2 import (
     State,
 )
 from xain_proto.fl.coordinator_pb2_grpc import CoordinatorStub
-from xain_proto.numproto import ndarray_to_proto, proto_to_ndarray
-from xain_proto.numproto.ndarray_pb2 import NDArray as pndarray
+from xain_proto.np import ndarray_to_proto, proto_to_ndarray
+from xain_proto.np.ndarray_pb2 import NDArray as pndarray
 
 from xain_sdk.logger import get_logger
 from xain_sdk.participant import InternalParticipant, Participant
@@ -65,7 +65,7 @@ def rendezvous(channel: Channel) -> None:
         reply = response.reply
 
 
-def start_training_round(channel: Channel) -> Tuple[List[ndarray], int, int]:
+def start_training_round(channel: Channel) -> Tuple[ndarray, int, int]:
     """Start a training round initiation exchange with a coordinator.
 
     The decoded contents of the response from the coordinator are returned.
@@ -74,7 +74,6 @@ def start_training_round(channel: Channel) -> Tuple[List[ndarray], int, int]:
         channel: A gRPC channel to the coordinator.
 
     Returns:
-
         A tuple ``(weights, epochs, epoch_base)`` where ``weights`` is
         the weights of a global model to train on, ``epochs`` is the
         number of epochs to train, and ``epoch_base`` is the epoch base
@@ -89,7 +88,8 @@ def start_training_round(channel: Channel) -> Tuple[List[ndarray], int, int]:
     )
     logger.info("Participant received", response_type=type(response))
 
-    weights: List[ndarray] = [proto_to_ndarray(weight) for weight in response.weights]
+    # unpack the response
+    weights: ndarray = proto_to_ndarray(response.weights)
     epochs: int = response.epochs
     epoch_base: int = response.epoch_base
 
@@ -97,7 +97,7 @@ def start_training_round(channel: Channel) -> Tuple[List[ndarray], int, int]:
 
 
 def end_training_round(
-    channel: Channel, weights: List[ndarray], number_samples: int, metrics: Dict[str, ndarray],
+    channel: Channel, weights: ndarray, number_samples: int, metrics: Dict[str, ndarray],
 ) -> None:
     """Start a training round completion exchange with a coordinator.
 
@@ -113,7 +113,7 @@ def end_training_round(
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
 
     # model weight arrays as protobuf message
-    weights_proto: List[pndarray] = [ndarray_to_proto(weight) for weight in weights]
+    weights_proto: pndarray = ndarray_to_proto(weights)
 
     # metric data containing the metric names mapped to arrays as protobuf message
     metrics_proto: Dict[str, pndarray] = {
@@ -134,6 +134,9 @@ def training_round(channel: Channel, participant: InternalParticipant, round: in
     Begins with `start_training_round`. Then performs local training computation using the
     `participant`. Finally, completes with `end_training_round`.
 
+    In case of empty weights from the coordinator (i.e. a 0th round for weights initialization) the
+    aggregation meta data and metrics from the participant are ignored.
+
     Args:
         channel: A gRPC channel to the coordinator.
         participant: The local participant.
@@ -141,42 +144,68 @@ def training_round(channel: Channel, participant: InternalParticipant, round: in
 
     Raises:
         TypeError: If the model weights received from the participant's local training round are not
-            of type ~typing.List[~numpy.ndarray].
+            of type `ndarray`.
+        TypeError: If the aggregation meta data received from the participant's local training round
+            is not of type `int`.
+        ValueError: If the aggregation meta data received from the participant's local training
+            round is negative.
         TypeError: If the metrics received from the participant's local training round are not of
-            type ~typing.Dict[str, ~numpy.ndarray].
+            type `Dict[str, ndarray]`.
     """
 
     # retreive global weights, epochs and epoch base from the coordinator
-    weights: List[ndarray]
+    global_weights: Optional[ndarray]
     epochs: int
     epoch_base: int
-    weights, epochs, epoch_base = start_training_round(channel=channel)
+    global_weights, epochs, epoch_base = start_training_round(channel=channel)
+    if not global_weights.size:
+        global_weights = None
 
     # start a local training round of the participant
-    number_samples: int
-    metrics: Dict[str, ndarray]
-    weights, number_samples, metrics = participant.train_round(
-        weights=weights, epochs=epochs, epoch_base=epoch_base
-    )
+    local_weights: ndarray
+    if global_weights is not None:  # ith training round
+        number_samples: int
+        metrics: Dict[str, ndarray]
+        local_weights, number_samples, metrics = participant.train_round(
+            weights=global_weights, epochs=epochs, epoch_base=epoch_base
+        )
 
-    # data validation
-    is_not_list_weights: bool = not isinstance(weights, List)
-    is_not_ndarray_weights: bool = not all(isinstance(weight, ndarray) for weight in weights)
-    if is_not_list_weights or is_not_ndarray_weights:
-        raise TypeError("Model weights must be of type `List[ndarray]`!")
-    is_not_dict_metrics: bool = not isinstance(metrics, Dict)
-    is_not_str_metrics: bool = not all(isinstance(key, str) for key in metrics.keys())
-    is_not_ndarray_metrics: bool = not all(isinstance(value, ndarray) for value in metrics.values())
-    if is_not_dict_metrics or is_not_str_metrics or is_not_ndarray_metrics:
-        raise TypeError("Metrics must be of type `Dict[str, ndarray]`!")
+        # data validation
+        if not isinstance(local_weights, ndarray):
+            raise TypeError("Model weights must be of type `ndarray`!")
+        if not isinstance(number_samples, int):
+            raise TypeError("Aggregation meta data must be of type `int`!")
+        if number_samples < 0:
+            raise ValueError("Aggregation meta data must be nonnegative!")
+        if (
+            not isinstance(metrics, Dict)
+            or not all(isinstance(key, str) for key in metrics.keys())
+            or not all(isinstance(value, ndarray) for value in metrics.values())
+        ):
+            raise TypeError("Metrics must be of type `Dict[str, ndarray]`!")
 
-    logger.info("Storing weights", round=round)
-    participant.write_weights(round, weights)
+        logger.info("Storing weights", round=round)
+        participant.write_weights(round, local_weights)
 
-    # return updated weights, number of training samples and metrics to the coordinator
-    end_training_round(
-        channel=channel, weights=weights, number_samples=number_samples, metrics=metrics
-    )
+        # return updated weights, number of training samples and metrics to the coordinator
+        end_training_round(
+            channel=channel, weights=local_weights, number_samples=number_samples, metrics=metrics
+        )
+
+    else:  # 0th training round
+        local_weights, _, _ = participant.train_round(
+            weights=global_weights, epochs=epochs, epoch_base=epoch_base
+        )
+
+        # data validation
+        if not isinstance(local_weights, ndarray):
+            raise TypeError("Model weights must be of type `ndarray`!")
+
+        logger.info("Storing weights", round=round)
+        participant.write_weights(round, local_weights)
+
+        # return initialized weights
+        end_training_round(channel=channel, weights=local_weights, number_samples=0, metrics={})
 
 
 class StateRecord:

@@ -21,6 +21,10 @@ pip install -r requirements.txt
 
 Follow the documentation on [xain-fl](https://github.com/xainag/xain-fl/tree/master#running-the-coordinator-locally) to start a new coordinator.
 
+**Start a storage service**
+
+The participants upload their results to an S3 bucket at the end of each round, so they need to be configured to connect to the relevant S3 service. Follow the documentation in the [`xain-fl` project](https://github.com/xainag/xain-fl/tree/master#running-the-coordinator-locally) to start a local `minio` service.
+
 **Start a participant**
 
 ```shell

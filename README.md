@@ -137,11 +137,21 @@ metrics = {
 ```
 
 
+#### Utility
+
+The `Participant` base class provide some utility methods to help with the implementation of the `train_round()` method, namely:
+- `set_tensorflow_weights()`: Set the weights of a Tensorflow model from a flat weight vector.
+- `get_tensorflow_weights()`: Get and flatten the weights of a Tensorflow model.
+- `set_pytorch_weights()`: Set the weights of a Pytorch model from a flat weight vector.
+- `get_pytorch_weights()`: Get and flatten the weights of a Pytorch model.
+
+
 ## Examples
 
 Please see the following examples showing how to implement your Participant with the SDK:
 - [Keras/Tensorflow example for the SDK Participant implementation](https://xain-sdk.readthedocs.io/en/latest/examples/tensorflow_keras.html)
 - [PyTorch example for the SDK Participant implementation](https://xain-sdk.readthedocs.io/en/latest/examples/pytorch.html)
+
 
 ### Testing
 

@@ -1,6 +1,6 @@
 """Tensorflow Keras example for the SDK Participant implementation."""
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from tensorflow import Tensor
@@ -10,7 +10,7 @@ from tensorflow.keras.layers import Dense  # pylint: disable=import-error
 
 from xain_sdk.participant import Participant as ABCParticipant
 from xain_sdk.participant_state_machine import start_participant
-from xain_sdk.store import StorageConfig
+from xain_sdk.store import S3StorageConfig
 
 
 class Participant(ABCParticipant):
@@ -21,6 +21,7 @@ class Participant(ABCParticipant):
 
     Attributes:
         model: The model to be trained.
+        model_shapes: The shapes of the model weights.
         trainset: A dataset for training.
         valset: A dataset for validation.
         testset: A dataset for testing.
@@ -43,34 +44,34 @@ class Participant(ABCParticipant):
         self.init_datasets()
 
     def train_round(  # pylint: disable=unused-argument
-        self, weights: List[np.ndarray], epochs: int, epoch_base: int
-    ) -> Tuple[List[np.ndarray], int, Dict[str, np.ndarray]]:
+        self, weights: Optional[np.ndarray], epochs: int, epoch_base: int
+    ) -> Tuple[np.ndarray, int, Dict[str, np.ndarray]]:
         """Train a model in a federated learning round.
 
         A model is given in terms of its weights and the model is trained on the participant's
         dataset for a number of epochs. The weights of the updated model are returned in combination
         with the number of samples of the train dataset and some gathered metrics.
 
-        If no weights are given (i.e. an empty list of weights), then the participant is expected to
-        initialize the weights according to its model definition and return them without training.
+        If the weights given are None, then the participant is expected to initialize the weights
+        according to its model definition and return them without training.
 
         Args:
-            weights (~typing.List[~numpy.ndarray]): The weights of the model to be trained.
+            weights (~typing.Optional[~numpy.ndarray]): The weights of the model to be trained.
             epochs (int): The number of epochs to be trained.
             epoch_base (int): The epoch base number for the optimizer state (in case of epoch
                 dependent optimizer parameters).
 
         Returns:
-            ~typing.Tuple[~typing.List[~numpy.ndarray], int, ~typing.Dict[str, ~numpy.ndarray]]: The
-                updated model weights, the number of training samples and the gathered metrics.
+            ~typing.Tuple[~numpy.ndarray, int, ~typing.Dict[str, ~numpy.ndarray]]: The updated model
+                weights, the number of training samples and the gathered metrics.
         """
 
         number_samples: int
         metrics: Dict[str, np.ndarray]
 
-        if weights:
+        if weights is not None:
             # load the weights of the global model into the local model
-            self.model.set_weights(weights)
+            self.set_tensorflow_weights(weights=weights, shapes=self.model_shapes, model=self.model)
 
             # train the local model for the specified number of epochs and gather the metrics
             number_samples = 80
@@ -90,11 +91,13 @@ class Participant(ABCParticipant):
             metrics = {}
 
         # return the updated model weights, the number of train samples and the gathered metrics
-        return self.model.get_weights(), number_samples, metrics
+        weights = self.get_tensorflow_weights(model=self.model)
+        return weights, number_samples, metrics
 
     def init_model(self) -> None:
         """Initialize a model."""
 
+        # define model layers and compile the model
         input_layer: Tensor = Input(shape=(10,), dtype="float32")
         hidden_layer: Tensor = Dense(
             units=6,
@@ -114,6 +117,11 @@ class Participant(ABCParticipant):
         self.model.compile(
             optimizer="Adam", loss="categorical_crossentropy", metrics=["categorical_accuracy"],
         )
+
+        # get the shapes of the model weights
+        self.model_shapes: List[Tuple[int, ...]] = [
+            weight.shape for weight in self.model.get_weights()
+        ]
 
     def init_datasets(self) -> None:
         """Initialize datasets."""
@@ -146,12 +154,15 @@ def main() -> None:
     """Entry point to start a participant."""
 
     participant: Participant = Participant()
-    storage_config: StorageConfig = StorageConfig(
-        "http://localhost:9000",
-        "minio",
-        "minio123",
-        "xain-fl-temporary-weights")
-    start_participant(participant, "127.0.0.1:50051", storage_config)
+    storage_config: S3StorageConfig = S3StorageConfig(
+        endpoint_url="http://localhost:9000",
+        access_key_id="minio",
+        secret_access_key="minio123",
+        bucket="xain-fl-temporary-weights",
+    )
+    start_participant(
+        participant=participant, coordinator_url="localhost:50051", storage_config=storage_config
+    )
 
 
 if __name__ == "__main__":
