@@ -75,9 +75,12 @@ class Participant(ABC):
 
         # expand the flat weights
         indices: ndarray = np.cumsum([np.prod(shape) for shape in shapes])
-        tensorflow_weights: List[ndarray] = np.split(weights, indices_or_sections=indices)
+        tensorflow_weights: List[ndarray] = np.split(
+            weights, indices_or_sections=indices
+        )
         tensorflow_weights = [
-            np.reshape(weight, newshape=shape) for weight, shape in zip(tensorflow_weights, shapes)
+            np.reshape(weight, newshape=shape)
+            for weight, shape in zip(tensorflow_weights, shapes)
         ]
 
         # apply the weights to the tensorflow model
@@ -100,7 +103,9 @@ class Participant(ABC):
         # pytorch must be imported locally for sdk framework agnosticity
         from torch.nn import Module
 
-        return np.concatenate(list(cast(Module, model).state_dict().values()), axis=None)
+        return np.concatenate(
+            list(cast(Module, model).state_dict().values()), axis=None
+        )
 
     @staticmethod
     def set_pytorch_weights(
@@ -123,13 +128,16 @@ class Participant(ABC):
         indices: ndarray = np.cumsum([np.prod(shape) for shape in shapes])
         pytorch_weights: List[ndarray] = np.split(weights, indices_or_sections=indices)
         pytorch_weights = [
-            np.reshape(weight, newshape=shape) for weight, shape in zip(pytorch_weights, shapes)
+            np.reshape(weight, newshape=shape)
+            for weight, shape in zip(pytorch_weights, shapes)
         ]
 
         # apply the weights to the pytorch model
         state_dict: Dict = {
             layer: torch.from_numpy(weight)  # pylint: disable=no-member
-            for layer, weight in zip(cast(Module, model).state_dict().keys(), pytorch_weights)
+            for layer, weight in zip(
+                cast(Module, model).state_dict().keys(), pytorch_weights
+            )
         }
         cast(Module, model).load_state_dict(state_dict)
 
@@ -159,7 +167,9 @@ class InternalParticipant:
     ) -> Tuple[ndarray, int, Dict[str, ndarray]]:
         """A wrapper for :py:meth:`~xain_sdk.participant.Participant.train_round`."""
 
-        return self.participant.train_round(weights=weights, epochs=epochs, epoch_base=epoch_base)
+        return self.participant.train_round(
+            weights=weights, epochs=epochs, epoch_base=epoch_base
+        )
 
     def write_weights(self, round: int, weights: ndarray) -> None:
         """A wrapper for :py:meth:`~xain_sdk.store.AbstractStore.write_weights`."""

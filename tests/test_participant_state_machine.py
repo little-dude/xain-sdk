@@ -33,7 +33,9 @@ def test_waiting_to_training() -> None:
 
     state_record: StateRecord = StateRecord(state=ParState.WAITING, round=1)
     # trained round 1, selected for round 3
-    heartbeat_response: HeartbeatResponse = HeartbeatResponse(state=State.ROUND, round=3)
+    heartbeat_response: HeartbeatResponse = HeartbeatResponse(
+        state=State.ROUND, round=3
+    )
     transit(state_record=state_record, heartbeat_response=heartbeat_response)
     assert state_record.lookup() == (ParState.TRAINING, 3)
 
@@ -142,7 +144,9 @@ def test_selection_wait_training(mock_begin_training: mock.Mock) -> None:
     mock_begin_training.assert_called_once_with(state_rec, _chan, _part)
 
 
-@pytest.mark.parametrize("parstate", [ParState.TRAINING, ParState.DONE, ParState.WAITING])
+@pytest.mark.parametrize(
+    "parstate", [ParState.TRAINING, ParState.DONE, ParState.WAITING]
+)
 @mock.patch("xain_sdk.participant_state_machine.training_round")
 @mock.patch("xain_sdk.participant_state_machine.begin_waiting")
 def test_begin_training(

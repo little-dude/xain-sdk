@@ -59,7 +59,9 @@ def rendezvous(channel: Channel) -> None:
         if response.reply == RendezvousReply.ACCEPT:
             logger.info("Participant received: ACCEPT")
         elif response.reply == RendezvousReply.LATER:
-            logger.info("Participant received: LATER. Retrying...", retry_timeout=RETRY_TIMEOUT)
+            logger.info(
+                "Participant received: LATER. Retrying...", retry_timeout=RETRY_TIMEOUT
+            )
             time.sleep(RETRY_TIMEOUT)
 
         reply = response.reply
@@ -97,7 +99,10 @@ def start_training_round(channel: Channel) -> Tuple[ndarray, int, int]:
 
 
 def end_training_round(
-    channel: Channel, weights: ndarray, number_samples: int, metrics: Dict[str, ndarray],
+    channel: Channel,
+    weights: ndarray,
+    number_samples: int,
+    metrics: Dict[str, ndarray],
 ) -> None:
     """Start a training round completion exchange with a coordinator.
 
@@ -128,7 +133,9 @@ def end_training_round(
     logger.info("Participant received", response_type=type(response))
 
 
-def training_round(channel: Channel, participant: InternalParticipant, round: int) -> None:
+def training_round(
+    channel: Channel, participant: InternalParticipant, round: int
+) -> None:
     """Initiate a training round exchange with a coordinator.
 
     Begins with `start_training_round`. Then performs local training computation using the
@@ -189,7 +196,10 @@ def training_round(channel: Channel, participant: InternalParticipant, round: in
 
         # return updated weights, number of training samples and metrics to the coordinator
         end_training_round(
-            channel=channel, weights=local_weights, number_samples=number_samples, metrics=metrics
+            channel=channel,
+            weights=local_weights,
+            number_samples=number_samples,
+            metrics=metrics,
         )
 
     else:  # 0th training round
@@ -205,7 +215,9 @@ def training_round(channel: Channel, participant: InternalParticipant, round: in
         participant.write_weights(round, local_weights)
 
         # return initialized weights
-        end_training_round(channel=channel, weights=local_weights, number_samples=0, metrics={})
+        end_training_round(
+            channel=channel, weights=local_weights, number_samples=0, metrics={}
+        )
 
 
 class StateRecord:
@@ -285,7 +297,11 @@ def transit(state_record: StateRecord, heartbeat_response: HeartbeatResponse) ->
                 logger.info(
                     "Transition to finished state", local_state=state_record.state,
                 )
-            elif msg == State.STANDBY or msg == State.ROUND and global_round == state_record.round:
+            elif (
+                msg == State.STANDBY
+                or msg == State.ROUND
+                and global_round == state_record.round
+            ):
                 logger.debug(
                     "Continue in waiting state",
                     local_round=state_record.round,
@@ -301,7 +317,9 @@ def transit(state_record: StateRecord, heartbeat_response: HeartbeatResponse) ->
                 )
 
 
-def message_loop(channel: Channel, state_record: StateRecord, terminate: threading.Event) -> None:
+def message_loop(
+    channel: Channel, state_record: StateRecord, terminate: threading.Event
+) -> None:
     """Periodically send (and handle) heartbeat messages in a loop.
 
     Args:
@@ -314,7 +332,8 @@ def message_loop(channel: Channel, state_record: StateRecord, terminate: threadi
     while not terminate.is_set():
         request = HeartbeatRequest()
         transit(
-            state_record=state_record, heartbeat_response=coordinator.Heartbeat(request=request),
+            state_record=state_record,
+            heartbeat_response=coordinator.Heartbeat(request=request),
         )
         time.sleep(HEARTBEAT_TIME)
 
@@ -354,7 +373,9 @@ def start_participant(
 
         state_record: StateRecord = StateRecord()
         terminate: threading.Event = threading.Event()
-        msg_loop = threading.Thread(target=message_loop, args=(channel, state_record, terminate))
+        msg_loop = threading.Thread(
+            target=message_loop, args=(channel, state_record, terminate)
+        )
         msg_loop.start()
 
         # in WAITING state

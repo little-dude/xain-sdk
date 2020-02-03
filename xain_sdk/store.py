@@ -41,7 +41,11 @@ class S3StorageConfig:
     """
 
     def __init__(
-        self, endpoint_url: str, access_key_id: str, secret_access_key: str, bucket: str,
+        self,
+        endpoint_url: str,
+        access_key_id: str,
+        secret_access_key: str,
+        bucket: str,
     ) -> None:
         """Initialize the S3 storage configuration.
 
@@ -98,7 +102,9 @@ class S3Store(AbstractStore):
         """
 
         bucket = self.s3.Bucket(self.config.bucket)
-        bucket.put_object(Body=pickle.dumps(weights), Key=f"{self.config.directory}/{round}")
+        bucket.put_object(
+            Body=pickle.dumps(weights), Key=f"{self.config.directory}/{round}"
+        )
 
 
 # FIXME(XP-515): Storage is a highly experimental feature so we do not

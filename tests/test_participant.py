@@ -50,7 +50,8 @@ def test_get_set_tensorflow_weights(  # pylint: disable=redefined-outer-name
     # get weights
     weights: np.ndarray = test_participant.get_tensorflow_weights(model=model)
     np.testing.assert_almost_equal(
-        actual=weights, desired=np.zeros(shape=(np.sum([np.prod(shape) for shape in shapes]),))
+        actual=weights,
+        desired=np.zeros(shape=(np.sum([np.prod(shape) for shape in shapes]),)),
     )
 
     # set weights
@@ -84,12 +85,15 @@ def test_get_set_pytorch_weights(  # pylint: disable=redefined-outer-name
 
     model: TestModel = TestModel()
     model.forward(torch.zeros((10,)))  # pylint: disable=no-member
-    shapes: List[Tuple[int, ...]] = [tuple(weight.shape) for weight in model.state_dict().values()]
+    shapes: List[Tuple[int, ...]] = [
+        tuple(weight.shape) for weight in model.state_dict().values()
+    ]
 
     # get weights
     weights: np.ndarray = test_participant.get_pytorch_weights(model=model)
     np.testing.assert_almost_equal(
-        actual=weights, desired=np.zeros(shape=(np.sum([np.prod(shape) for shape in shapes]),))
+        actual=weights,
+        desired=np.zeros(shape=(np.sum([np.prod(shape) for shape in shapes]),)),
     )
 
     # set weights
