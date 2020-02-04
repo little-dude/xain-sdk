@@ -142,8 +142,10 @@ metrics = {
 The `Participant` base class provide some utility methods to help with the implementation of the `train_round()` method, namely:
 - `set_tensorflow_weights()`: Set the weights of a Tensorflow model from a flat weight vector.
 - `get_tensorflow_weights()`: Get and flatten the weights of a Tensorflow model.
+- `get_tensorflow_shapes()`: Get the shapes of the weights of a Tensorflow model.
 - `set_pytorch_weights()`: Set the weights of a Pytorch model from a flat weight vector.
 - `get_pytorch_weights()`: Get and flatten the weights of a Pytorch model.
+- `get_pytorch_shapes()`: Get the shapes of the weights of a Pytorch model.
 
 
 ## Examples

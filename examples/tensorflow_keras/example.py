@@ -128,9 +128,9 @@ class Participant(ABCParticipant):
         )
 
         # get the shapes of the model weights
-        self.model_shapes: List[Tuple[int, ...]] = [
-            weight.shape for weight in self.model.get_weights()
-        ]
+        self.model_shapes: List[Tuple[int, ...]] = self.get_tensorflow_shapes(
+            model=self.model
+        )
 
     def init_datasets(self) -> None:
         """Initialize datasets."""

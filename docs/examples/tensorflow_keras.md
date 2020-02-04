@@ -49,6 +49,12 @@ and to get a flattened weights vector from the local model, by
 set_tensorflow_weights(weights: np.ndarray, shapes: List[Tuple[int, ...]], model: tf.keras.Model) -> None
 ```
 
+as well as the original shapes of the weights of the local model, by
+
+```python
+get_tensorflow_shapes(model: tf.keras.Model) -> List[Tuple[int, ...]]
+```
+
 
 ## TF Keras Model
 
@@ -92,7 +98,7 @@ self.model.compile(optimizer="Adam", loss="categorical_crossentropy", metrics=["
 The utility method for setting the model weights require the original shapes of the weights, obtainable as
 
 ```python
-self.model_shapes: List[Tuple[int, ...]] = [weight.shape for weight in self.model.get_weights()]
+self.model_shapes: List[Tuple[int, ...]] = self.get_tensorflow_shapes(model=self.model)
 ```
 
 

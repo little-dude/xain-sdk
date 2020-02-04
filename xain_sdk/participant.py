@@ -10,10 +10,10 @@ from xain_sdk.store import AbstractStore
 
 # Currently, the combination of sphinx_autodoc_typehints and typing.TYPE_CHECKING
 # crashes, see https://github.com/agronholm/sphinx-autodoc-typehints/issues/22.
-# Therefor, the workaround introduces a descriptive generic type alias which gets casted
-# to a locally imported type.
+# Therefore, the workaround introduces a descriptive generic type alias which gets
+# casted to a locally imported type.
 TensorflowKerasModel = TypeVar("TensorflowKerasModel")  # for tensorflow.keras.Model
-TorchNNModule = TypeVar("TorchNNModule")  # for torch.nn.Module
+TorchNnModule = TypeVar("TorchNnModule")  # for torch.nn.Module
 
 
 class Participant(ABC):
@@ -43,6 +43,23 @@ class Participant(ABC):
             The updated model weights, the number of training samples and the gathered
                 metrics.
         """
+
+    @staticmethod
+    def get_tensorflow_shapes(model: TensorflowKerasModel) -> List[Tuple[int, ...]]:
+        """Get the shapes of the weights of a tensorflow model.
+
+        Args:
+            model (~tensorflow.keras.Model): A tensorflow model.
+
+        Returns:
+            ~typing.List[~typing.Tuple[int, ...]]: The shapes of the model weights per
+                layer.
+        """
+
+        # tensorflow must be imported locally for sdk framework agnosticity
+        from tensorflow.keras import Model  # pylint: disable=import-error
+
+        return [weight.shape for weight in cast(Model, model).get_weights()]
 
     @staticmethod
     def get_tensorflow_weights(model: TensorflowKerasModel) -> ndarray:
@@ -90,7 +107,30 @@ class Participant(ABC):
         cast(Model, model).set_weights(tensorflow_weights)
 
     @staticmethod
-    def get_pytorch_weights(model: TorchNNModule) -> ndarray:
+    def get_pytorch_shapes(model: TorchNnModule) -> List[Tuple[int, ...]]:
+        """Get the shapes of the weights of a pytorch model.
+
+        Note:
+            This will only work with models which already did a forward pass at least
+            once.
+
+        Args:
+            model (~torch.nn.Module): A pytorch model.
+
+        Returns:
+            ~typing.List[~typing.Tuple[int, ...]]: The shapes of the model weights per
+                layer.
+        """
+
+        # pytorch must be imported locally for sdk framework agnosticity
+        from torch.nn import Module
+
+        return [
+            tuple(weight.shape) for weight in cast(Module, model).state_dict().values()
+        ]
+
+    @staticmethod
+    def get_pytorch_weights(model: TorchNnModule) -> ndarray:
         """Get the flattened weights vector from a pytorch model.
 
         Note:
@@ -113,7 +153,7 @@ class Participant(ABC):
 
     @staticmethod
     def set_pytorch_weights(
-        weights: ndarray, shapes: List[Tuple[int, ...]], model: TorchNNModule
+        weights: ndarray, shapes: List[Tuple[int, ...]], model: TorchNnModule
     ) -> None:
         """Set the weights of a pytorch model.
 

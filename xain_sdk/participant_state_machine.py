@@ -99,10 +99,7 @@ def start_training_round(channel: Channel) -> Tuple[ndarray, int, int]:
 
 
 def end_training_round(
-    channel: Channel,
-    weights: ndarray,
-    number_samples: int,
-    metrics: Dict[str, ndarray],
+    channel: Channel, weights: ndarray, number_samples: int, metrics: Dict[str, ndarray]
 ) -> None:
     """Start a training round completion exchange with a coordinator.
 
@@ -299,7 +296,7 @@ def transit(state_record: StateRecord, heartbeat_response: HeartbeatResponse) ->
                 state_record.state = ParState.DONE
                 state_record.cond.notify()
                 logger.info(
-                    "Transition to finished state", local_state=state_record.state,
+                    "Transition to finished state", local_state=state_record.state
                 )
             elif (
                 msg == State.STANDBY

@@ -104,9 +104,9 @@ class Participant(ABCParticipant):
 
         # get the shapes of the model weights
         self.model.forward(torch.zeros((4, 3, 32, 32)))  # pylint: disable=no-member
-        self.model_shapes: List[Tuple[int, ...]] = [
-            tuple(weight.shape) for weight in self.model.state_dict().values()
-        ]
+        self.model_shapes: List[Tuple[int, ...]] = self.get_pytorch_shapes(
+            model=self.model
+        )
 
     def init_datasets(self) -> None:
         """Initialize datasets."""

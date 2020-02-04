@@ -53,6 +53,12 @@ and to get a flattened weights vector from the local model, by
 set_pytorch_weights(weights: np.ndarray, shapes: List[Tuple[int, ...]], model: torch.nn.Module) -> None
 ```
 
+as well as the original shapes of the weights of the local model, by
+
+```python
+get_pytorch_shapes(model: torch.nn.Module) -> List[Tuple[int, ...]]
+```
+
 
 ## PyTorch Model 
 
@@ -148,7 +154,7 @@ that is an instance of the CNN we defined following the PyTorch tutorial. The ut
 
 ```python
 self.model.forward(torch.zeros((4, 3, 32, 32)))
-self.model_shapes: List[Tuple[int, ...]] = [tuple(weight.shape) for weight in self.model.state_dict().values()]
+self.model_shapes: List[Tuple[int, ...]] = self.get_pytorch_shapes(model=self.model)
 ```
 
 where the dummy forward pass is necessary to populate the state dict but has no effect otherwise.
