@@ -1,10 +1,7 @@
-import glob
 import os.path
-import pathlib
 import sys
 
 from setuptools import find_packages, setup
-from setuptools.command.develop import develop
 
 if sys.version_info < (3, 6):
     sys.exit("Please use Python version 3.6 or higher.")
@@ -23,64 +20,24 @@ with open(version_file_path) as fp:
 with open(readme_file_path, "r") as fp:
     readme = fp.read()
 
-
-# Handle protobuf
-class CustomDevelopCommand(develop):
-    def run(self):
-        # we need to import this here or else these packages would have to be
-        # installed in the system before we could run the setup.py
-        import numproto
-        import grpc_tools
-        from grpc_tools import protoc
-
-        develop.run(self)
-
-        # get the path of the numproto protofiles
-        # this will give us the path to the site-packages where numproto is
-        # installed
-        numproto_path = pathlib.Path(numproto.__path__[0]).parent
-
-        # get the path of grpc_tools protofiles
-        grpc_path = grpc_tools.__path__[0]
-
-        proto_files = glob.glob("./protobuf/xain_sdk/cproto/*.proto")
-        command = [
-            "grpc_tools.protoc",
-            # path to numproto .proto files
-            f"--proto_path={numproto_path}",
-            # path to google .proto fiels
-            f"--proto_path={grpc_path}/_proto",
-            "--proto_path=./protobuf",
-            "--python_out=./",
-            "--grpc_python_out=./",
-            "--mypy_out=./",
-        ] + proto_files
-
-        print("Building proto_files {}".format(proto_files))
-        if protoc.main(command) != 0:
-            raise Exception("error: {} failed".format(command))
-
-
 # License comments according to `pip-licenses`
 
 install_requires = [
     "typing-extensions~=3.7",  # PSF
     "numpy~=1.15",  # BSD
     "grpcio~=1.23",  # Apache License 2.0
-    "protobuf~=3.9",  # 3-Clause BSD License
-    "numproto~=0.3",  # Apache License 2.0
-    "structlog==19.1.0",  # Apache License 2.0 & MIT License
+    "structlog~=19.2",  # Apache License 2.0 & MIT License
+    # TODO: change xain-proto requirement to "xain-proto==0.2.0" once it is released
+    "xain-proto @ git+https://github.com/xainag/xain-proto.git@37fc05566da91d263c37d203c0ba70804960be9b#egg=xain_proto-0.1.0&subdirectory=python",  # Apache License 2.0
 ]
 
 dev_require = [
-    "grpcio-tools~=1.23",  # Apache License 2.0
     "black==19.10b0",  # MIT
     "mypy==0.740",  # MIT License
     "pylint==2.3.1",  # GPL
     "astroid<=2.2.5",  # LGPL
     "isort==4.3.20",  # MIT
     "pip-licenses==1.15.2",  # MIT License
-    "mypy-protobuf==1.16",  # Apache License 2.0
     "twine==2.0.0",  # Apache License 2.0
     "wheel==0.33.6",  # MIT
 ]
@@ -88,10 +45,12 @@ dev_require = [
 tests_require = [
     "pytest==4.6.2",  # MIT license
     "pytest-cov==2.7.1",  # MIT
-    "pytest-watch==4.2.0",  # MIT
 ]
 
-docs_require = ["Sphinx==2.2.1", "recommonmark==0.6.0", "sphinx-rtd-theme==0.4.3"]
+docs_require = [
+    "Sphinx==2.2.1",
+    "m2r==0.2.1",
+]
 
 setup(
     name="xain-sdk",
@@ -132,5 +91,4 @@ setup(
         "docs": docs_require,
         "dev": dev_require + tests_require + docs_require,
     },
-    cmdclass={"develop": CustomDevelopCommand},
 )

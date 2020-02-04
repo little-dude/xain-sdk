@@ -1,7 +1,6 @@
 """Logging configuration."""
 
 import logging
-from typing import Type
 
 import structlog
 from structlog._config import BoundLoggerLazyProxy

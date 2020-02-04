@@ -129,3 +129,6 @@ dmypy.json
 # Editors
 .idea
 .vscode
+
+# Downloaded data for examples
+data/

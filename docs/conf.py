@@ -9,12 +9,13 @@
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#
+
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("../xain-sdk"))
+from sphinx.ext import apidoc
 
+sys.path.insert(0, os.path.abspath("../xain-sdk"))
 
 # -- Project information -----------------------------------------------------
 
@@ -29,7 +30,7 @@ author = "XAIN Contributors"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    "recommonmark",
+    "m2r",
     "sphinx.ext.napoleon",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
@@ -83,7 +84,7 @@ intersphinx_mapping = {
 
 
 def run_apidoc(_):
-    exclude = ["../xain_sdk/**_pb2**"]
+    exclude = []
 
     argv = [
         "--doc-project",
@@ -98,8 +99,6 @@ def run_apidoc(_):
         "./_code_reference/",
         "../xain_sdk/",
     ] + exclude
-
-    from sphinx.ext import apidoc
 
     apidoc.main(argv)
 
