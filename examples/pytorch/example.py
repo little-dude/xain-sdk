@@ -16,8 +16,8 @@ from xain_sdk.store import S3StorageConfig
 class Participant(ABCParticipant):
     """An example of a PyTorch implementation of a participant for federated learning.
 
-    The attributes for the model and the datasets are only for convenience, they might as well be
-    loaded elsewhere.
+    The attributes for the model and the datasets are only for convenience, they might
+    as well be loaded elsewhere.
 
     Attributes:
         model: The model to be trained.
@@ -33,9 +33,9 @@ class Participant(ABCParticipant):
     def __init__(self) -> None:
         """Initialize the custom participant.
 
-        The model and the datasets are defined here only for convenience, they might as well be
-        loaded elsewhere. Due to the nature of this example, the model is a simple dense neural
-        network and the datasets are randomly generated.
+        The model and the datasets are defined here only for convenience, they might as
+        well be loaded elsewhere. Due to the nature of this example, the model is a
+        simple dense neural network and the datasets are randomly generated.
         """
 
         super(Participant, self).__init__()
@@ -51,22 +51,25 @@ class Participant(ABCParticipant):
     ) -> Tuple[np.ndarray, int, Dict[str, np.ndarray]]:
         """Train a model in a federated learning round.
 
-        A model is given in terms of its weights and the model is trained on the participant's
-        dataset for a number of epochs. The weights of the updated model are returned in combination
-        with the number of samples of the train dataset and some gathered metrics.
+        A model is given in terms of its weights and the model is trained on the
+        participant's dataset for a number of epochs. The weights of the updated model
+        are returned in combination with the number of samples of the train dataset and
+        some gathered metrics.
 
-        If the weights given are None, then the participant is expected to initialize the weights
-        according to its model definition and return them without training.
+        If the weights given are None, then the participant is expected to initialize
+        the weights according to its model definition and return them without training.
 
         Args:
-            weights (~typing.Optional[~numpy.ndarray]): The weights of the model to be trained.
+            weights (~typing.Optional[~numpy.ndarray]): The weights of the model to be
+                trained.
             epochs (int): The number of epochs to be trained.
-            epoch_base (int): The epoch base number for the optimizer state (in case of epoch
-                dependent optimizer parameters).
+            epoch_base (int): The epoch base number for the optimizer state (in case of
+                epoch dependent optimizer parameters).
 
         Returns:
-            ~typing.Tuple[~numpy.ndarray, int, ~typing.Dict[str, ~numpy.ndarray]]: The updated model
-                weights, the number of training samples and the gathered metrics.
+            ~typing.Tuple[~numpy.ndarray, int, ~typing.Dict[str, ~numpy.ndarray]]: The
+                updated model weights, the number of training samples and the gathered
+                metrics.
         """
 
         number_samples: int
@@ -74,9 +77,11 @@ class Participant(ABCParticipant):
 
         if weights is not None:
             # load the weights of the global model into the local model
-            self.set_pytorch_weights(weights=weights, shapes=self.model_shapes, model=self.model)
+            self.set_pytorch_weights(
+                weights=weights, shapes=self.model_shapes, model=self.model
+            )
 
-            # train the local model for the specified number of epochs and gather the metrics
+            # train the local model for the specified no. of epochs and gather metrics
             number_samples = len(self.trainloader)
             self.model.train_n_epochs(self.trainloader, epochs)
             metrics = {}  # TODO: return metric values from `train_n_epochs`
@@ -87,7 +92,7 @@ class Participant(ABCParticipant):
             number_samples = 0
             metrics = {}
 
-        # return the updated model weights, the number of train samples and the gathered metrics
+        # return the updated model weights, the number of train samples and the metrics
         weights = self.get_pytorch_weights(model=self.model)
         return weights, number_samples, metrics
 
@@ -107,7 +112,10 @@ class Participant(ABCParticipant):
         """Initialize datasets."""
 
         transform = transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),]
+            [
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
         )
         self.trainset = datasets.CIFAR10(
             root="./data", train=True, download=True, transform=transform
@@ -134,7 +142,9 @@ def main() -> None:
         bucket="xain-fl-temporary-weights",
     )
     start_participant(
-        participant=participant, coordinator_url="localhost:50051", storage_config=storage_config
+        participant=participant,
+        coordinator_url="localhost:50051",
+        storage_config=storage_config,
     )
 
 

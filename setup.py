@@ -36,7 +36,7 @@ dev_require = [
     "mypy==0.740",  # MIT License
     "pylint==2.3.1",  # GPL
     "astroid<=2.2.5",  # LGPL
-    "isort==4.3.20",  # MIT
+    "isort==4.3.21",  # MIT
     "pip-licenses==1.15.2",  # MIT License
     "twine==2.0.0",  # Apache License 2.0
     "wheel==0.33.6",  # MIT

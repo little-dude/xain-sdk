@@ -106,7 +106,8 @@ def end_training_round(
 ) -> None:
     """Start a training round completion exchange with a coordinator.
 
-    The locally trained model weights, the number of samples and the gathered metrics are sent.
+    The locally trained model weights, the number of samples and the gathered metrics
+    are sent.
 
     Args:
         channel: A gRPC channel to the coordinator.
@@ -138,11 +139,12 @@ def training_round(
 ) -> None:
     """Initiate a training round exchange with a coordinator.
 
-    Begins with `start_training_round`. Then performs local training computation using the
-    `participant`. Finally, completes with `end_training_round`.
+    Begins with `start_training_round`. Then performs local training computation using
+    the `participant`. Finally, completes with `end_training_round`.
 
-    In case of empty weights from the coordinator (i.e. a 0th round for weights initialization) the
-    aggregation meta data and metrics from the participant are ignored.
+    In case of empty weights from the coordinator (i.e. a 0th round for weights
+    initialization) the aggregation meta data and metrics from the participant are
+    ignored.
 
     Args:
         channel: A gRPC channel to the coordinator.
@@ -150,14 +152,14 @@ def training_round(
         round: round number.
 
     Raises:
-        TypeError: If the model weights received from the participant's local training round are not
-            of type `ndarray`.
-        TypeError: If the aggregation meta data received from the participant's local training round
-            is not of type `int`.
-        ValueError: If the aggregation meta data received from the participant's local training
-            round is negative.
-        TypeError: If the metrics received from the participant's local training round are not of
-            type `Dict[str, ndarray]`.
+        TypeError: If the model weights received from the participant's local training
+            round are not of type `ndarray`.
+        TypeError: If the aggregation meta data received from the participant's local
+            training round is not of type `int`.
+        ValueError: If the aggregation meta data received from the participant's local
+            training round is negative.
+        TypeError: If the metrics received from the participant's local training round
+            are not of type `Dict[str, ndarray]`.
     """
 
     # retreive global weights, epochs and epoch base from the coordinator
@@ -194,7 +196,7 @@ def training_round(
         logger.info("Storing weights", round=round)
         participant.write_weights(round, local_weights)
 
-        # return updated weights, number of training samples and metrics to the coordinator
+        # return updated weights, no. of training samples and metrics to the coordinator
         end_training_round(
             channel=channel,
             weights=local_weights,
@@ -271,7 +273,9 @@ class StateRecord:
 
 
 def transit(state_record: StateRecord, heartbeat_response: HeartbeatResponse) -> None:
-    """Participant state transition function on a heartbeat response. Updates the state record.
+    """Participant state transition function on a heartbeat response.
+
+    Updates the state record.
 
     Args:
         state_record: The updatable state record of the participant.

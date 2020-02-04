@@ -34,7 +34,7 @@ jobs:
 
       - name: isort
         run: |
-          isort --check-only --indent=4 -rc setup.py xain_sdk
+          isort --check-only --diff --settings-path=.isort.cfg -rc setup.py xain_sdk examples tests
 
       - name: pylint
         continue-on-error: true

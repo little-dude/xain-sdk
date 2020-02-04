@@ -8,9 +8,10 @@ from numpy import ndarray
 
 from xain_sdk.store import AbstractStore
 
-# Currently, the combination of sphinx_autodoc_typehints and typing.TYPE_CHECKING crashes, see
-# https://github.com/agronholm/sphinx-autodoc-typehints/issues/22. Therefor, the workaround
-# introduces a descriptive generic type alias which gets casted to a locally imported type.
+# Currently, the combination of sphinx_autodoc_typehints and typing.TYPE_CHECKING
+# crashes, see https://github.com/agronholm/sphinx-autodoc-typehints/issues/22.
+# Therefor, the workaround introduces a descriptive generic type alias which gets casted
+# to a locally imported type.
 TensorflowKerasModel = TypeVar("TensorflowKerasModel")  # for tensorflow.keras.Model
 TorchNNModule = TypeVar("TorchNNModule")  # for torch.nn.Module
 
@@ -24,12 +25,13 @@ class Participant(ABC):
     ) -> Tuple[ndarray, int, Dict[str, ndarray]]:
         """Train a model in a federated learning round.
 
-        A model is given in terms of its weights and the model is trained on the participant's
-        dataset for a number of epochs. The weights of the updated model are returned in combination
-        with the number of samples of the train dataset and some gathered metrics.
+        A model is given in terms of its weights and the model is trained on the
+        participant's dataset for a number of epochs. The weights of the updated model
+        are returned in combination with the number of samples of the train dataset and
+        some gathered metrics.
 
-        If the weights given are None, then the participant is expected to initialize the weights
-        according to its model definition and return them without training.
+        If the weights given are None, then the participant is expected to initialize
+        the weights according to its model definition and return them without training.
 
         Args:
             weights: The weights of the model to be trained.
@@ -38,7 +40,8 @@ class Participant(ABC):
                 dependent optimizer parameters).
 
         Returns:
-            The updated model weights, the number of training samples and the gathered metrics.
+            The updated model weights, the number of training samples and the gathered
+                metrics.
         """
 
     @staticmethod
@@ -65,8 +68,8 @@ class Participant(ABC):
 
         Args:
             weights (~numpy.ndarray): A vector of flat model weights.
-            shapes (~typing.List[~typing.Tuple[int, ...]]): The original shapes of the tensorflow
-                model weights.
+            shapes (~typing.List[~typing.Tuple[int, ...]]): The original shapes of the
+                tensorflow model weights.
             model (~tensorflow.keras.Model): A tensorflow model.
         """
 
@@ -91,7 +94,8 @@ class Participant(ABC):
         """Get the flattened weights vector from a pytorch model.
 
         Note:
-            This will only work with models which already did a forward pass at least once.
+            This will only work with models which already did a forward pass at least
+            once.
 
         Args:
             model (~torch.nn.Module): A pytorch model.
@@ -115,8 +119,8 @@ class Participant(ABC):
 
         Args:
             weights (~numpy.ndarray): A vector of flat model weights.
-            shapes (~typing.List[~typing.Tuple[int, ...]]): The original shapes of the pytorch
-                model weights.
+            shapes (~typing.List[~typing.Tuple[int, ...]]): The original shapes of the
+                pytorch model weights.
             model (~torch.nn.Module): A pytorch model.
         """
 
