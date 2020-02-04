@@ -27,8 +27,8 @@ install_requires = [
     "numpy~=1.15",  # BSD
     "grpcio~=1.23",  # Apache License 2.0
     "structlog~=19.2",  # Apache License 2.0 & MIT License
-    # TODO: change xain-proto requirement to "xain-proto==0.2.0" once it is released
-    "xain-proto @ git+https://github.com/xainag/xain-proto.git@37fc05566da91d263c37d203c0ba70804960be9b#egg=xain_proto-0.1.0&subdirectory=python",  # Apache License 2.0
+    "xain-proto==0.4.0",  # Apache License 2.0
+    "boto3~=1.10",  # Apache License 2.0
 ]
 
 dev_require = [
@@ -36,7 +36,7 @@ dev_require = [
     "mypy==0.740",  # MIT License
     "pylint==2.3.1",  # GPL
     "astroid<=2.2.5",  # LGPL
-    "isort==4.3.20",  # MIT
+    "isort==4.3.21",  # MIT
     "pip-licenses==1.15.2",  # MIT License
     "twine==2.0.0",  # Apache License 2.0
     "wheel==0.33.6",  # MIT
@@ -45,11 +45,14 @@ dev_require = [
 tests_require = [
     "pytest==4.6.2",  # MIT license
     "pytest-cov==2.7.1",  # MIT
+    "tensorflow==1.15.2",
+    "torch==1.3.1",
 ]
 
 docs_require = [
     "Sphinx==2.2.1",
     "m2r==0.2.1",
+    "sphinx-autodoc-typehints==1.10.3",  # MIT
 ]
 
 setup(

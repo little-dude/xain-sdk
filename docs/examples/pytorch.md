@@ -7,17 +7,7 @@ Every example contains two steps:
 - Setting up the Coordinator that waits for the Participants 
 - Setting up the SDK Participant together with a suitable model that connects to the Coordinator. 
 
-The first part is described in the [XAIN-fl](https://github.com/xainag/xain-fl) repository. 
-Then we can assume that we have our Coordinator waiting for the Participants to join. 
-The next step is to set up the Participant SDK and equip it with a model. 
-We cover the requirements of the [Participant Abstract Base Class](#participant-abstract-base-class), give ideas on how to handle a PyTorch model and show how to implement a Federated Learning example. You can find the complete [source code](#source-code) at the end of this document.
-
-The example code makes use of typing to be precise about the expected data types, specifically
-
-```python
-from typing import Dict, List, Tuple
-import numpy as np
-```
+The first part is described in the [XAIN-fl](https://github.com/xainag/xain-fl) repository. Then we can assume that we have our Coordinator waiting for the Participants to join. The next step is to set up the Participant SDK and equip it with a model. We cover the requirements of the [Participant Abstract Base Class](#participant-abstract-base-class), give ideas on how to handle a PyTorch model and show how to implement a Federated Learning example. You can find the complete source code [here](https://github.com/xainag/xain-sdk/blob/master/examples/pytorch/example.py). The example code makes use of typing to be precise about the expected data types.
 
 
 ## Participant Abstract Base Class
@@ -37,20 +27,31 @@ class Participant(ABCParticipant):
 and must implement the `train_round()` method in order to be able to execute a round of Federated Learning, where each round consists of a certain number of epochs. This method adheres to the function signature
 
 ```python
-def train_round(
-    self, weights: List[np.ndarray], epochs: int, epoch_base: int
-) -> Tuple[List[np.ndarray], int, Dict[str, np.ndarray]]:
+train_round(self, weights: Optional[np.ndarray], epochs: int, epoch_base: int)
+-> Tuple[np.ndarray, int, Dict[str, np.ndarray]]
 ```
 
 The expected arguments are:
-- `weights (List[np.ndarray])`: A Numpy array containing all the model weights.
-- `epochs (int)`: The number of epochs to be trained during the Federated Learning round.
+- `weights (Optional[np.ndarray])`: Either a Numpy array containing the flattened weights of the global model or None. In the latter case the participant must properly initialize the weights instead of loading them.
+- `epochs (int)`: The number of epochs to be trained during the federated learning round. Can be any non-negative number including zero.
 - `epoch_base (int)`: An epoch base number in case the state of the training optimizer is dependent on the overall epoch (e.g. for learning rate schedules).
 
 The expected return values are:
-- `List[np.ndarray]`: The weights of the local model which results from the global model after certain `epochs` of training on local data.
-- `int`: The number of samples in the train dataset for Federated Averaging.
+- `np.ndarray`: The flattened weights of the local model which results from the global model after certain `epochs` of training on local data.
+- `int`: The number of samples in the train dataset used for aggregation strategies.
 - `Dict[str, np.ndarray]`: The metrics gathered during the training. This might be an empty dictionary if the `Coordinator` is not supposed to collect the metrics.
+
+The `Participant`'s base class provides utility methods to set the weights of the local model according to the given flat weights vector, by
+
+```python
+get_pytorch_weights(model: torch.nn.Module) -> np.ndarray
+```
+
+and to get a flattened weights vector from the local model, by
+
+```python
+set_pytorch_weights(weights: np.ndarray, shapes: List[Tuple[int, ...]], model: torch.nn.Module) -> None
+```
 
 
 ## PyTorch Model 
@@ -87,20 +88,6 @@ def forward(self, x: Tensor) -> Tensor:
     x = F.relu(self.fc2(x))
     x = self.fc3(x)
     return x
-```
-
-In order to import and export model weights we need to set up two methods that allow import/export to a numpy array.
-
-```python 
-def read_from_vector(
-    self, indices: np.ndarray, flattened: np.ndarray, shapes: np.ndarray
-) -> None:
-```
-
-and
-
-```python 
-def flatten_weights(self) -> [np.ndarray, np.ndarray, np.ndarray]: 
 ```
 
 The last part of our model class is setting the optimizer together with loss function and training loop.
@@ -157,41 +144,50 @@ Besides the test and train set, the Participant also contains a model
 self.model = Net()
 ```
 
-that is an instance of the CNN we defined following the PyTorch tutorial. From the model we also obtain its initial weights and shape of the layers.
+that is an instance of the CNN we defined following the PyTorch tutorial. The utility method for setting the model weights require the original shapes of the weights, obtainable as
 
 ```python
-self.flattened, self.shapes, self.indices = self.model.flatten_weights()
-self.number_samples: int = len(self.trainloader)
+self.model.forward(torch.zeros((4, 3, 32, 32)))
+self.model_shapes: List[Tuple[int, ...]] = [tuple(weight.shape) for weight in self.model.state_dict().values()]
 ```
 
-These parameters become handy when we need to import parameters from a single Numpy array. Such an initiated Participant is required to have the `train_round` method to communicate with the Coordinator.
+where the dummy forward pass is necessary to populate the state dict but has no effect otherwise.
 
 
 ## PyTorch Training Round
 
-The implementation of the actual `train_round()` method consists of three main steps. First, the provided `weights` of the global model are loaded into the local model, then some number of epochs is trained and as a last step we export the weights to a numpy array.
-
-```python
-def train_round(
-    self, weights: List[np.ndarray], epochs: int, epoch_base: int
-) -> Tuple[List[np.ndarray], int, Dict[str, np.ndarray]]:
-```
-
-As mentioned before we want to perform three crucial steps in this method
+The implementation of the actual `train_round()` method consists of three main steps. First, the provided `weights` of the global model are loaded into the local model, as
 
 ```python 
-self.model.read_from_vector(self.indices, weights, self.shapes)
-self.model.train_n_epochs(self.trainloader, epochs)
-self.flattened, self.shapes, self.indices = self.model.flatten_weights()
+if weights is not None:
+    self.set_pytorch_weights(weights=weights, shapes=self.model_shapes, model=self.model)
 ```
 
-which we defined together with the CNN class. The last step is to calculate matrices that we are interested in our model.
+Next, the local model is trained for certain `epochs` on the local data, whereby the metrics are gathered in each epoch, as
 
 ```python
-print("Training accuracy", self.model.evaluate_on_test(self.testloader))
+number_samples = len(self.trainloader)
+self.model.train_n_epochs(self.trainloader, epochs)
 ```
 
+The metrics are transformed into a dictionary, which maps metric names to the gathered metric values, by
 
-## Source Code
+```python
+metrics = self.model.evaluate_on_test(self.testloader))
+```
 
-The source code of the example can be found [here](https://github.com/xainag/xain-sdk/blob/master/examples/pytorch/example.py).
+Finally, the updated weights of the local model, the number of samples of the train dataset and the gathered metrics are returned, as
+
+```python
+weights = self.get_pytorch_weights(model=self.model)
+return weights, number_samples, metrics
+```
+
+If there are no weights provided, then the participant initializes new weights according to its model definition and returns them without further training, as
+
+```python
+else:
+    self.init_model()
+    number_samples = 0
+    metrics = {}
+```

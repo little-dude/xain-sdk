@@ -1,217 +1,102 @@
-"""Tests for GRPC Participant."""
+"""Tests for the participant API."""
 
-from unittest import mock
+from typing import Dict, List, Optional, Tuple
 
-from xain_proto.fl.coordinator_pb2 import HeartbeatResponse, State
+import numpy as np
+import pytest
+from tensorflow import Tensor as TFTensor
+from tensorflow.keras import Input, Model  # pylint: disable=import-error
+from tensorflow.keras.layers import Dense  # pylint: disable=import-error
+import torch
+from torch import Tensor as PTTensor
+from torch.nn import Linear, Module, init
 
-from xain_sdk.participant_state_machine import (
-    ParState,
-    StateRecord,
-    begin_post_training,
-    begin_selection_wait,
-    transit,
-)
-
-
-def test_from_start() -> None:
-    """Test start."""
-
-    state_record: StateRecord = StateRecord()
-    assert state_record.lookup() == (ParState.WAITING_FOR_SELECTION, 0)
-
-    heartbeat_response: HeartbeatResponse = HeartbeatResponse(state=State.ROUND)
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (ParState.TRAINING, 0)
-
-    # should return immediately
-    assert state_record.wait_until_selected_or_done() == ParState.TRAINING
+from xain_sdk.participant import Participant
 
 
-def test_waiting_to_training_i() -> None:
-    """Test waiting to training."""
+@pytest.fixture
+def test_participant() -> Participant:
+    """Fixture to create a test participant."""
 
-    state_record: StateRecord = StateRecord(state=ParState.WAITING_FOR_SELECTION)
-    heartbeat_response: HeartbeatResponse = HeartbeatResponse(state=State.ROUND, round=1)
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (ParState.TRAINING, 1)
+    class TestParticipant(Participant):
+        """Test participant."""
 
-    # should return immediately
-    assert state_record.wait_until_selected_or_done() == ParState.TRAINING
+        def train_round(
+            self, weights: Optional[np.ndarray], epochs: int, epoch_base: int
+        ) -> Tuple[np.ndarray, int, Dict[str, np.ndarray]]:
+            """Dummy train round."""
 
+            return weights, 0, {}
 
-def test_waiting_to_done() -> None:
-    """Test waiting to done."""
-
-    state_record = StateRecord(state=ParState.WAITING_FOR_SELECTION, round=2)
-    heartbeat_response: HeartbeatResponse = HeartbeatResponse(state=State.FINISHED)
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (ParState.DONE, 2)
-
-    # should return immediately
-    assert state_record.wait_until_selected_or_done() == ParState.DONE
+    return TestParticipant()
 
 
-def test_waiting_to_waiting() -> None:
-    """Test waiting to waiting."""
+def test_get_set_tensorflow_weights(  # pylint: disable=redefined-outer-name
+    test_participant: Participant,
+) -> None:
+    """Test the getting and setting of tensorflow weights."""
 
-    state_record: StateRecord = StateRecord(state=ParState.WAITING_FOR_SELECTION, round=3)
-    heartbeat_response: HeartbeatResponse = HeartbeatResponse(state=State.STANDBY)
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (ParState.WAITING_FOR_SELECTION, 3)
+    # define model layers
+    input_layer: TFTensor = Input(shape=(10,), dtype="float32")
+    hidden_layer: TFTensor = Dense(
+        units=6, use_bias=True, kernel_initializer="zeros", bias_initializer="zeros",
+    )(inputs=input_layer)
+    output_layer: TFTensor = Dense(
+        units=2, use_bias=True, kernel_initializer="zeros", bias_initializer="zeros",
+    )(inputs=hidden_layer)
+    model: Model = Model(inputs=[input_layer], outputs=[output_layer])
+    shapes: List[Tuple[int, ...]] = [weight.shape for weight in model.get_weights()]
 
-
-def test_training_to_training() -> None:
-    """Test training to training."""
-
-    state_record: StateRecord = StateRecord(state=ParState.TRAINING, round=4)
-    start_state, round_num = state_record.lookup()
-    assert isinstance(start_state, ParState)
-    heartbeat_response: HeartbeatResponse = HeartbeatResponse(state=State.STANDBY)
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (start_state, round_num)
-
-    heartbeat_response.state = State.ROUND
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (start_state, round_num)
-
-    heartbeat_response.state = State.FINISHED
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (start_state, round_num)
-
-
-def test_posttraining_to_training() -> None:
-    """Test postraining to training."""
-
-    state_record: StateRecord = StateRecord(state=ParState.POST_TRAINING, round=5)
-    start_state, round_num = state_record.lookup()
-    assert isinstance(start_state, ParState)
-    heartbeat_response: HeartbeatResponse = HeartbeatResponse(state=State.ROUND, round=5)
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (start_state, round_num)
-
-    # old round? shouldn't affect me...
-    heartbeat_response.round = 0
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (start_state, round_num)
-
-    # NOTE a "future" round e.g. 7 would be unexpected under current assumptions
-    # it should be preceded by a STANDBY to indicate nonselection for round 6
-
-    # selected for next round
-    heartbeat_response.round = 6
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (ParState.TRAINING, 6)
-
-    # should return immediately
-    assert state_record.wait_until_next_round() == ParState.TRAINING
-
-
-def test_posttraining_to_done() -> None:
-    """Test posttraining to done."""
-
-    state_record: StateRecord = StateRecord(state=ParState.POST_TRAINING, round=6)
-    heartbeat_response: HeartbeatResponse = HeartbeatResponse(state=State.FINISHED)
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (ParState.DONE, 6)
-    # should return immediately
-    assert state_record.wait_until_next_round() == ParState.DONE
-
-
-def test_posttraining_to_waiting() -> None:
-    """Test posttraining to waiting."""
-
-    state_record: StateRecord = StateRecord(state=ParState.POST_TRAINING, round=7)
-    heartbeat_response: HeartbeatResponse = HeartbeatResponse(state=State.STANDBY)
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (ParState.WAITING_FOR_SELECTION, 7)
-    # should return immediately
-    assert state_record.wait_until_next_round() == ParState.WAITING_FOR_SELECTION
-
-
-def test_restart_round() -> None:
-    """Test restart."""
-
-    # participant has done its training for round 8
-    state_record: StateRecord = StateRecord(state=ParState.POST_TRAINING, round=8)
-    # it's told to go into waiting
-    heartbeat_response: HeartbeatResponse = HeartbeatResponse(state=State.STANDBY)
-    transit(state_record=state_record, heartbeat_response=heartbeat_response)
-    assert state_record.lookup() == (ParState.WAITING_FOR_SELECTION, 8)
-
-    # and back again to training...
-    heartbeat_response.state = State.ROUND
-    heartbeat_response.round = 8  # but still in round 8!
-    # => interpret this as "round restarted" e.g. original theta was corrupt or something
-    transit(state_record, heartbeat_response)
-    # => re-do the training...
-    assert state_record.lookup() == (ParState.TRAINING, 8)
-
-
-@mock.patch("xain_sdk.participant_state_machine.begin_training")
-def test_selection_wait_done(mock_begin_training: mock.Mock) -> None:
-    """Test effect of selection-waiting until DONE state."""
-
-    state_rec = StateRecord(state=ParState.DONE)
-    chan, part = mock.MagicMock(), mock.MagicMock()
-    begin_selection_wait(state_rec, chan, part)
-    p_st, _ = state_rec.lookup()
-    assert p_st == ParState.DONE
-    mock_begin_training.assert_not_called()
-
-
-@mock.patch("xain_sdk.participant_state_machine.begin_training")
-def test_selection_wait_training(mock_begin_training: mock.Mock) -> None:
-    """Test effect of selection-waiting until TRAINING state."""
-
-    state_rec = StateRecord(state=ParState.TRAINING)
-    chan, part = mock.MagicMock(), mock.MagicMock()
-    begin_selection_wait(state_rec, chan, part)
-    mock_begin_training.assert_called_once_with(
-        state_record=state_rec, channel=chan, participant=part
+    # get weights
+    weights: np.ndarray = test_participant.get_tensorflow_weights(model=model)
+    np.testing.assert_almost_equal(
+        actual=weights,
+        desired=np.zeros(shape=(np.sum([np.prod(shape) for shape in shapes]),)),
     )
 
+    # set weights
+    test_participant.set_tensorflow_weights(weights=weights, shapes=shapes, model=model)
+    for weight, shape in zip(model.get_weights(), shapes):
+        np.testing.assert_almost_equal(actual=weight, desired=np.zeros(shape=shape))
 
-@mock.patch("xain_sdk.participant_state_machine.begin_training")
-@mock.patch("xain_sdk.participant_state_machine.begin_selection_wait")
-def test_post_training_training(
-    mock_begin_selection_wait: mock.Mock, mock_begin_training: mock.Mock
+
+def test_get_set_pytorch_weights(  # pylint: disable=redefined-outer-name
+    test_participant: Participant,
 ) -> None:
-    """Test effect of post-train-waiting until TRAINING state."""
+    """Test the getting and setting of pytorch weights."""
 
-    state_rec = StateRecord(state=ParState.TRAINING)
-    chan, part = mock.MagicMock(), mock.MagicMock()
-    begin_post_training(state_rec, chan, part)
-    mock_begin_training.assert_called_once_with(
-        state_record=state_rec, channel=chan, participant=part
+    # define model layers
+    class TestModel(Module):
+        """Test neural network."""
+
+        def __init__(self) -> None:
+            super(TestModel, self).__init__()
+            self.linear1: Linear = Linear(in_features=10, out_features=6)
+            self.linear2: Linear = Linear(in_features=6, out_features=2)
+            init.constant_(self.linear1.weight, 0)
+            init.constant_(self.linear1.bias, 0)
+            init.constant_(self.linear2.weight, 0)
+            init.constant_(self.linear2.bias, 0)
+
+        def forward(self, input_layer: PTTensor) -> PTTensor:  # type: ignore  # pylint: disable=arguments-differ
+            hidden_layer: PTTensor = self.linear1(input_layer)
+            output_layer: PTTensor = self.linear2(hidden_layer)
+            return output_layer
+
+    model: TestModel = TestModel()
+    model.forward(torch.zeros((10,)))  # pylint: disable=no-member
+    shapes: List[Tuple[int, ...]] = [
+        tuple(weight.shape) for weight in model.state_dict().values()
+    ]
+
+    # get weights
+    weights: np.ndarray = test_participant.get_pytorch_weights(model=model)
+    np.testing.assert_almost_equal(
+        actual=weights,
+        desired=np.zeros(shape=(np.sum([np.prod(shape) for shape in shapes]),)),
     )
-    mock_begin_selection_wait.assert_not_called()
 
-
-@mock.patch("xain_sdk.participant_state_machine.begin_training")
-@mock.patch("xain_sdk.participant_state_machine.begin_selection_wait")
-def test_post_training_waiting(
-    mock_begin_selection_wait: mock.Mock, mock_begin_training: mock.Mock
-) -> None:
-    """Test effect of post-train-waiting until WAITING_FOR_SELECTION state."""
-
-    state_rec = StateRecord(state=ParState.WAITING_FOR_SELECTION)
-    chan, part = mock.MagicMock(), mock.MagicMock()
-    begin_post_training(state_rec, chan, part)
-    mock_begin_selection_wait.assert_called_once_with(
-        state_record=state_rec, channel=chan, participant=part
-    )
-    mock_begin_training.assert_not_called()
-
-
-@mock.patch("xain_sdk.participant_state_machine.begin_training")
-@mock.patch("xain_sdk.participant_state_machine.begin_selection_wait")
-def test_post_training_done(
-    mock_begin_selection_wait: mock.Mock, mock_begin_training: mock.Mock
-) -> None:
-    """Test effect of post-train-waiting until DONE state."""
-
-    state_rec = StateRecord(state=ParState.DONE)
-    chan, part = mock.MagicMock(), mock.MagicMock()
-    begin_post_training(state_rec, chan, part)
-    mock_begin_training.assert_not_called()
-    mock_begin_selection_wait.assert_not_called()
+    # set weights
+    test_participant.set_pytorch_weights(weights=weights, shapes=shapes, model=model)
+    for weight, shape in zip(model.state_dict().values(), shapes):
+        np.testing.assert_almost_equal(actual=weight, desired=np.zeros(shape=shape))

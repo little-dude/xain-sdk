@@ -12,12 +12,11 @@ def get_logger(name: str, level: int = logging.INFO) -> BoundLoggerLazyProxy:
     """Wrap the python logger with the default configuration of structlog.
 
     Args:
-        name (str): Identification name. For module name pass name=__name__.
-        level (int): Threshold for this logger. Defaults to logging.INFO.
+        name: Identification name. For module name pass ``name=__name__``.
+        level: Threshold for this logger. Defaults to ``logging.INFO``.
 
     Returns:
-        ~structlog._config.BoundLoggerLazyProxy: The wrapped python logger with the default
-            configuration of structlog.
+        The wrapped python logger with the default configuration of structlog.
     """
 
     structlog.configure(

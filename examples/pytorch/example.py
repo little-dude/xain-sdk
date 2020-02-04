@@ -1,30 +1,33 @@
-"""Tensorflow Keras example for the SDK Participant implementation."""
+"""PyTorch example for the SDK Participant implementation."""
 
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-from tensorflow import Tensor
-from tensorflow.data import Dataset  # pylint: disable=import-error
-from tensorflow.keras import Input, Model  # pylint: disable=import-error
-from tensorflow.keras.layers import Dense  # pylint: disable=import-error
+import torch
+from torch import utils
+from torchvision import datasets, transforms
 
+from cnn_class import Net
 from xain_sdk.participant import Participant as ABCParticipant
 from xain_sdk.participant_state_machine import start_participant
 from xain_sdk.store import S3StorageConfig
 
 
 class Participant(ABCParticipant):
-    """An example of a TF Keras implementation of a participant for federated learning.
+    """An example of a PyTorch implementation of a participant for federated learning.
 
     The attributes for the model and the datasets are only for convenience, they might
     as well be loaded elsewhere.
 
     Attributes:
         model: The model to be trained.
-        model_shapes: The shapes of the model weights.
         trainset: A dataset for training.
-        valset: A dataset for validation.
         testset: A dataset for testing.
+        trainloader: A pytorch data loader obtained from train data set.
+        testloader: A pytorch data loader obtained from test data set.
+        flattened: A flattened vector of models weights.
+        shape: CNN model architecture.
+        indices: Indices of split points in the flattened vector.
     """
 
     def __init__(self) -> None:
@@ -74,22 +77,14 @@ class Participant(ABCParticipant):
 
         if weights is not None:
             # load the weights of the global model into the local model
-            self.set_tensorflow_weights(
+            self.set_pytorch_weights(
                 weights=weights, shapes=self.model_shapes, model=self.model
             )
 
             # train the local model for the specified no. of epochs and gather metrics
-            number_samples = 80
-            metrics_per_epoch: List[List[np.ndarray]] = []
-            for _ in range(epochs):
-                self.model.fit(x=self.trainset, verbose=2, shuffle=False)
-                metrics_per_epoch.append(self.model.evaluate(x=self.valset, verbose=0))
-            metrics = {
-                name: np.stack(np.atleast_1d(*metric))
-                for name, metric in zip(
-                    self.model.metrics_names, zip(*metrics_per_epoch)
-                )
-            }
+            number_samples = len(self.trainloader)
+            self.model.train_n_epochs(self.trainloader, epochs)
+            metrics = {}  # TODO: return metric values from `train_n_epochs`
 
         else:
             # initialize the weights of the local model
@@ -98,67 +93,42 @@ class Participant(ABCParticipant):
             metrics = {}
 
         # return the updated model weights, the number of train samples and the metrics
-        weights = self.get_tensorflow_weights(model=self.model)
+        weights = self.get_pytorch_weights(model=self.model)
         return weights, number_samples, metrics
 
     def init_model(self) -> None:
         """Initialize a model."""
 
-        # define model layers and compile the model
-        input_layer: Tensor = Input(shape=(10,), dtype="float32")
-        hidden_layer: Tensor = Dense(
-            units=6,
-            activation="relu",
-            use_bias=True,
-            kernel_initializer="glorot_uniform",
-            bias_initializer="zeros",
-        )(inputs=input_layer)
-        output_layer: Tensor = Dense(
-            units=2,
-            activation="softmax",
-            use_bias=True,
-            kernel_initializer="glorot_uniform",
-            bias_initializer="zeros",
-        )(inputs=hidden_layer)
-        self.model: Model = Model(inputs=[input_layer], outputs=[output_layer])
-        self.model.compile(
-            optimizer="Adam",
-            loss="categorical_crossentropy",
-            metrics=["categorical_accuracy"],
-        )
+        # define model layers
+        self.model: Net = Net()
 
         # get the shapes of the model weights
+        self.model.forward(torch.zeros((4, 3, 32, 32)))  # pylint: disable=no-member
         self.model_shapes: List[Tuple[int, ...]] = [
-            weight.shape for weight in self.model.get_weights()
+            tuple(weight.shape) for weight in self.model.state_dict().values()
         ]
 
     def init_datasets(self) -> None:
         """Initialize datasets."""
 
-        self.trainset: Dataset = (
-            Dataset.from_tensor_slices(
-                tensors=(
-                    np.ones(shape=(80, 10), dtype=np.float32),
-                    np.concatenate(
-                        [np.eye(N=2, M=2, dtype=np.float32) for _ in range(40)]
-                    ),
-                )
-            )
-            .shuffle(buffer_size=80)
-            .batch(batch_size=10)
+        transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
         )
-        self.valset: Dataset = Dataset.from_tensor_slices(
-            tensors=(
-                np.ones(shape=(10, 10), dtype=np.float32),
-                np.concatenate([np.eye(N=2, M=2, dtype=np.float32) for _ in range(5)]),
-            )
-        ).batch(batch_size=10)
-        self.testset: Dataset = Dataset.from_tensor_slices(
-            tensors=(
-                np.ones(shape=(10, 10), dtype=np.float32),
-                np.concatenate([np.eye(N=2, M=2, dtype=np.float32) for _ in range(5)]),
-            )
-        ).batch(batch_size=10)
+        self.trainset = datasets.CIFAR10(
+            root="./data", train=True, download=True, transform=transform
+        )
+        self.trainloader = utils.data.DataLoader(
+            self.trainset, batch_size=4, shuffle=True, num_workers=2
+        )
+        self.testset = datasets.CIFAR10(
+            root="./data", train=False, download=True, transform=transform
+        )
+        self.testloader = utils.data.DataLoader(
+            self.testset, batch_size=4, shuffle=False, num_workers=2
+        )
 
 
 def main() -> None:

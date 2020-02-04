@@ -1,4 +1,5 @@
 [![Workflow Lint and test (master)](https://github.com/xainag/xain-sdk/workflows/Lint%20and%20test%20%28master%29/badge.svg)](https://github.com/xainag/xain-sdk)
+[![PyPI](https://img.shields.io/pypi/v/xain-sdk)](https://pypi.org/project/xain-sdk/)
 [![GitHub license](https://img.shields.io/github/license/xainag/xain-sdk)](https://github.com/xainag/xain-sdk/blob/master/LICENSE)
 [![Documentation Status](https://readthedocs.org/projects/xain-sdk/badge/?version=latest)](https://xain-sdk.readthedocs.io/en/latest/)
 [![Gitter chat](https://badges.gitter.im/xainag.png)](https://gitter.im/xainag)
@@ -71,21 +72,29 @@ class MyParticipant(Participant):
     def train_round(
         self, weights: List[ndarray], epochs: int, epoch_base: int
     ) -> Tuple[List[ndarray], int, Dict[str, ndarray]]:
-        
-        # define the number of samples in the training dataset
-        number_train_samples: int = 80
-        
-        # load weights into the model
-        ...
 
-        # train the model for the specified number of epochs
-        ...
+        number_samples: int
+        metrics: Dict[str, ndarray]
         
-        # gather the metrics of the trained epochs
-        ...
+        if weights:
+            # load weights into the model
+            ...
 
-        # return the updated weights
-        return weights, number_train_samples, metrics
+            # train the model for the specified number of epochs
+            weights = ...
+            
+            # gather the number of training samples and the metrics of the trained epochs
+            number_samples = ...
+            metrics = ...
+
+        else:
+            # initialize new weights for the model
+            weights = ...
+            number_samples = 0
+            metrics = {}
+
+        # return the updated weights, number of train samples and gathered metrics
+        return weights, number_samples, metrics
 ```
 
 
@@ -128,11 +137,27 @@ metrics = {
 ```
 
 
+#### Utility
+
+The `Participant` base class provide some utility methods to help with the implementation of the `train_round()` method, namely:
+- `set_tensorflow_weights()`: Set the weights of a Tensorflow model from a flat weight vector.
+- `get_tensorflow_weights()`: Get and flatten the weights of a Tensorflow model.
+- `set_pytorch_weights()`: Set the weights of a Pytorch model from a flat weight vector.
+- `get_pytorch_weights()`: Get and flatten the weights of a Pytorch model.
+
+
 ## Examples
 
 Please see the following examples showing how to implement your Participant with the SDK:
 - [Keras/Tensorflow example for the SDK Participant implementation](https://xain-sdk.readthedocs.io/en/latest/examples/tensorflow_keras.html)
 - [PyTorch example for the SDK Participant implementation](https://xain-sdk.readthedocs.io/en/latest/examples/pytorch.html)
+
+
+### Testing
+
+You can connect multiple participants at once running in parallel to a coordinator with the following script:
+
+[Bash script for starting multiple participants](https://github.com/xainag/xain-sdk/tree/master/examples#start-multiple-participants-in-parallel)
 
 
 ## Getting help

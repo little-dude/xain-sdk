@@ -2,14 +2,7 @@
 
 This is an example of a Tensorflow Keras implementation of a `Participant` for federated learning.
 
-We cover the requirements of the [Participant Abstract Base Class](#participant-abstract-base-class), give ideas on how to handle a [Keras Model](#keras-model) and [Keras Data](#keras-data) in the `Participant`, and show how to implement a federated learning [Keras Training Round](#keras-training-round). You can find the complete [Source Code](#source-code) at the end of this document.
-
-The example code makes use of typing to be precise about the expected data types, specifically
-
-```python
-from typing import Dict, List, Tuple
-import numpy as np
-```
+We cover the requirements of the [Participant Abstract Base Class](#participant-abstract-base-class), give ideas on how to handle a [TF Keras Model](#tf-keras-model) and [TF Keras Data](#tf-keras-data) in the `Participant`, and show how to implement a federated learning [TF Keras Training Round](#tf-keras-training-round). You can find the complete source code [here](https://github.com/xainag/xain-sdk/blob/master/examples/tensorflow_keras/example.py). The example code makes use of typing to be precise about the expected data types.
 
 
 ## Participant Abstract Base Class
@@ -29,35 +22,37 @@ class Participant(ABCParticipant):
 and must implement the `train_round()` method in order to be able to execute a round of federated learning, where each round consists of a certain number of epochs. This method adheres to the function signature
 
 ```python
-def train_round(
-    self, weights: List[np.ndarray], epochs: int, epoch_base: int
-) -> Tuple[List[np.ndarray], int, Dict[str, np.ndarray]]:
+train_round(self, weights: Optional[np.ndarray], epochs: int, epoch_base: int)
+-> Tuple[np.ndarray, int, Dic[str, np.ndarray]]
 ```
 
 The expected arguments are:
 
-- `weights (List[np.ndarray])`: A list of Numpy arrays containing the weights of the global model.
-- `epochs (int)`: The number of epochs to be trained during the federated learning round.
+- `weights (Optional[np.ndarray])`: Either a Numpy array containing the flattened weights of the global model or None. In the latter case the participant must properly initialize the weights instead of loading them.
+- `epochs (int)`: The number of epochs to be trained during the federated learning round. Can be any non-negative number including zero.
 - `epoch_base (int)`: An epoch base number in case the state of the training optimizer is dependent on the overall epoch (e.g. for learning rate schedules).
 
 The expected return values are:
-- `List[np.ndarray]`: The weights of the local model which results from the global model after certain `epochs` of training on local data.
-- `int`: The number of samples in the train dataset for federated averaging.
+- `np.ndarray`: The flattened weights of the local model which results from the global model after certain `epochs` of training on local data.
+- `int`: The number of samples in the train dataset used for aggregation strategies.
 - `Dict[str, np.ndarray]`: The metrics gathered during the training. This might be an empty dictionary if the `Coordinator` is not supposed to collect the metrics.
 
-
-## Keras Model
-
-A Keras model might either be loaded from a file, generated during the initialization of the `Participant`, or even generated on the fly in a `train_round()`. Here, we present a simple dense neural network for classification generated during the `Participant`'s initialization. We make use of the Keras components
+The `Participant`'s base class provides utility methods to set the weights of the local model according to the given flat weights vector, by
 
 ```python
-from tensorflow import Tensor
-from tensorflow.data import Dataset
-from tensorflow.keras import Input, Model
-from tensorflow.keras.layers import Dense
+get_tensorflow_weights(model: tf.keras.Model) -> np.ndarray
 ```
 
-The example model consists of an input layer holding 10 parameters per sample, as
+and to get a flattened weights vector from the local model, by
+
+```python
+set_tensorflow_weights(weights: np.ndarray, shapes: List[Tuple[int, ...]], model: tf.keras.Model) -> None
+```
+
+
+## TF Keras Model
+
+A TF Keras model might either be loaded from a file, generated during the initialization of the `Participant`, or even generated on the fly in a `train_round()`. Here, we present a simple dense neural network for classification generated during the `Participant`'s initialization. The example model consists of an input layer holding 10 parameters per sample, as
 
 ```python
 input_layer: Tensor = Input(shape=(10,), dtype="float32")
@@ -91,21 +86,24 @@ The model gets compiled with an Adam optimizer, the categorical crossentropy los
 
 ```python
 self.model: Model = Model(inputs=[input_layer], outputs=[output_layer])
-self.model.compile(
-    optimizer="Adam", loss="categorical_crossentropy", metrics=["categorical_accuracy"]
-)
+self.model.compile(optimizer="Adam", loss="categorical_crossentropy", metrics=["categorical_accuracy"])
+```
+
+The utility method for setting the model weights require the original shapes of the weights, obtainable as
+
+```python
+self.model_shapes: List[Tuple[int, ...]] = [weight.shape for weight in self.model.get_weights()]
 ```
 
 
-## Keras Data
+## TF Keras Data
 
-The data on which the model will be trained, can either be loaded from a data source (e.g. file, bucket, data base) during the initialization of the `Participant` or on the fly in a `train_round()`. Here, we employ randomly generated placeholder data as an example. This is by no means a meaningful dataset, but it should be sufficient to convey the overall idea. The number of samples in the training dataset is set in order to apply federated averaging. The dataset for training gets shuffled and batched, like
+The data on which the model will be trained, can either be loaded from a data source (e.g. file, bucket, data base) during the initialization of the `Participant` or on the fly in a `train_round()`. Here, we employ randomly generated placeholder data as an example. This is by no means a meaningful dataset, but it should be sufficient to convey the overall idea. The dataset for training gets shuffled and batched, like
 
 ```python
 self.trainset: Dataset = Dataset.from_tensor_slices(
     tensors=(np.ones(shape=(80, 10), dtype=np.float32), np.eye(N=80, M=10, dtype=np.float32))
 ).shuffle(buffer_size=80).batch(batch_size=10)
-self.number_samples: int = 80
 ```
 
 while the datasets for validation and testing only get batched, like
@@ -120,17 +118,19 @@ self.testset: Dataset = Dataset.from_tensor_slices(
 ```
 
 
-## Keras Training Round
+## TF Keras Training Round
 
 The implementation of the actual `train_round()` method consists of three main steps. First, the provided `weights` of the global model are loaded into the local model, as
 
 ```python
-self.model.set_weights(weights)
+if weights is not None:
+    self.set_tensorflow_weights(weights=weights, shapes=self.model_shapes, model=self.model)
 ```
 
 Next, the local model is trained for certain `epochs` on the local data, whereby the metrics are gathered in each epoch, as
 
 ```python
+number_samples = 80
 metrics_per_epoch: List[List[np.ndarray]] = []
 for _ in range(epochs):
     self.model.fit(x=self.trainset, verbose=2, shuffle=False)
@@ -140,21 +140,26 @@ for _ in range(epochs):
 The metrics are transformed into a dictionary, which maps metric names to the gathered metric values, by
 
 ```python
-metrics: Dict[str, np.ndarray] = {
+metrics = {
     name: np.stack(np.atleast_1d(*metric))
     for name, metric in zip(self.model.metrics_names, zip(*metrics_per_epoch))
 }
 ```
 
-This explicit training loop is due to the Tensorflow v1 datasets and their handling in `fit()` and `evaluate()`. Hence a Tensorflow v2 approach would reduce to a single call to `fit()` additionally specifying the validation data and number of epochs. The metrics could then be gathered from the history dictionary returned by `fit()`.
+This explicit training loop is due to the Tensorflow v1 datasets and their handling in `fit()` and `evaluate()`. Hence a Tensorflow v2 approach would reduce to a single call to `fit()` additionally specifying the validation data and number of epochs. The metrics could then for example be gathered from the history dictionary returned by `fit()`.
 
 Finally, the updated weights of the local model, the number of samples of the train dataset and the gathered metrics are returned, as
 
 ```python
-return self.model.get_weights(), self.number_of_samples, metrics
+weights = self.get_tensorflow_weights(model=self.model)
+return weights, number_samples, metrics
 ```
 
+If there are no weights provided, then the participant initializes new weights according to its model definition and returns them without further training, as
 
-## Source Code
-
-The source code of the example can be found [here](https://github.com/xainag/xain-sdk/blob/master/examples/tensorflow_keras/example.py).
+```python
+else:
+    self.init_model()
+    number_samples = 0
+    metrics = {}
+```

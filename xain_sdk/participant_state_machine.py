@@ -3,7 +3,7 @@
 from enum import Enum, auto
 import threading
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, Optional, Tuple
 
 from grpc import Channel, insecure_channel
 from numpy import ndarray
@@ -20,11 +20,12 @@ from xain_proto.fl.coordinator_pb2 import (
     State,
 )
 from xain_proto.fl.coordinator_pb2_grpc import CoordinatorStub
-from xain_proto.numproto import ndarray_to_proto, proto_to_ndarray
-from xain_proto.numproto.ndarray_pb2 import NDArray as pndarray
+from xain_proto.np import ndarray_to_proto, proto_to_ndarray
+from xain_proto.np.ndarray_pb2 import NDArray as pndarray
 
 from xain_sdk.logger import get_logger
-from xain_sdk.participant import Participant
+from xain_sdk.participant import InternalParticipant, Participant
+from xain_sdk.store import AbstractStore, DummyStore, S3StorageConfig, S3Store
 
 logger = get_logger(__name__)
 
@@ -37,9 +38,8 @@ HEARTBEAT_TIME: int = 10
 class ParState(Enum):
     """Enumeration of Participant states."""
 
-    WAITING_FOR_SELECTION: auto = auto()
+    WAITING: auto = auto()
     TRAINING: auto = auto()
-    POST_TRAINING: auto = auto()
     DONE: auto = auto()
 
 
@@ -47,7 +47,7 @@ def rendezvous(channel: Channel) -> None:
     """Start a rendezvous exchange with a coordinator.
 
     Args:
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
+        channel: A gRPC channel to the coordinator.
     """
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
@@ -59,24 +59,27 @@ def rendezvous(channel: Channel) -> None:
         if response.reply == RendezvousReply.ACCEPT:
             logger.info("Participant received: ACCEPT")
         elif response.reply == RendezvousReply.LATER:
-            logger.info("Participant received: LATER. Retrying...", retry_timeout=RETRY_TIMEOUT)
+            logger.info(
+                "Participant received: LATER. Retrying...", retry_timeout=RETRY_TIMEOUT
+            )
             time.sleep(RETRY_TIMEOUT)
 
         reply = response.reply
 
 
-def start_training_round(channel: Channel) -> Tuple[List[ndarray], int, int]:
+def start_training_round(channel: Channel) -> Tuple[ndarray, int, int]:
     """Start a training round initiation exchange with a coordinator.
 
     The decoded contents of the response from the coordinator are returned.
 
     Args:
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
+        channel: A gRPC channel to the coordinator.
 
     Returns:
-        ~typing.List[~numpy.ndarray]: The weights of a global model to train on.
-        int: The number of epochs to train.
-        int: The epoch base of the global model.
+        A tuple ``(weights, epochs, epoch_base)`` where ``weights`` is
+        the weights of a global model to train on, ``epochs`` is the
+        number of epochs to train, and ``epoch_base`` is the epoch base
+        of the global model.
     """
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
@@ -87,7 +90,8 @@ def start_training_round(channel: Channel) -> Tuple[List[ndarray], int, int]:
     )
     logger.info("Participant received", response_type=type(response))
 
-    weights: List[ndarray] = [proto_to_ndarray(weight) for weight in response.weights]
+    # unpack the response
+    weights: ndarray = proto_to_ndarray(response.weights)
     epochs: int = response.epochs
     epoch_base: int = response.epoch_base
 
@@ -95,23 +99,27 @@ def start_training_round(channel: Channel) -> Tuple[List[ndarray], int, int]:
 
 
 def end_training_round(
-    channel: Channel, weights: List[ndarray], number_samples: int, metrics: Dict[str, ndarray],
+    channel: Channel,
+    weights: ndarray,
+    number_samples: int,
+    metrics: Dict[str, ndarray],
 ) -> None:
     """Start a training round completion exchange with a coordinator.
 
-    The locally trained model weights, the number of samples and the gathered metrics are sent.
+    The locally trained model weights, the number of samples and the gathered metrics
+    are sent.
 
     Args:
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        weights (~typing.List[~numpy.ndarray]): The weights of the locally trained model.
-        number_samples (int): The number of samples in the training dataset.
-        metrics (~typing.Dict[str, ~numpy.ndarray]): Metrics data.
+        channel: A gRPC channel to the coordinator.
+        weights: The weights of the locally trained model.
+        number_samples: The number of samples in the training dataset.
+        metrics: Metrics data.
     """
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
 
     # model weight arrays as protobuf message
-    weights_proto: List[pndarray] = [ndarray_to_proto(weight) for weight in weights]
+    weights_proto: pndarray = ndarray_to_proto(weights)
 
     # metric data containing the metric names mapped to arrays as protobuf message
     metrics_proto: Dict[str, pndarray] = {
@@ -126,65 +134,105 @@ def end_training_round(
     logger.info("Participant received", response_type=type(response))
 
 
-def training_round(channel: Channel, participant: Participant) -> None:
+def training_round(
+    channel: Channel, participant: InternalParticipant, round: int
+) -> None:
     """Initiate a training round exchange with a coordinator.
 
-    Begins with `start_training_round`. Then performs local training computation using the
-    `participant`. Finally, completes with `end_training_round`.
+    Begins with `start_training_round`. Then performs local training computation using
+    the `participant`. Finally, completes with `end_training_round`.
+
+    In case of empty weights from the coordinator (i.e. a 0th round for weights
+    initialization) the aggregation meta data and metrics from the participant are
+    ignored.
 
     Args:
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        participant (~xain_sdk.participant.Participant): The local participant.
+        channel: A gRPC channel to the coordinator.
+        participant: The local participant.
+        round: round number.
 
     Raises:
-        TypeError: If the model weights received from the participant's local training round are not
-            of type ~typing.List[~numpy.ndarray].
-        TypeError: If the metrics received from the participant's local training round are not of
-            type ~typing.Dict[str, ~numpy.ndarray].
+        TypeError: If the model weights received from the participant's local training
+            round are not of type `ndarray`.
+        TypeError: If the aggregation meta data received from the participant's local
+            training round is not of type `int`.
+        ValueError: If the aggregation meta data received from the participant's local
+            training round is negative.
+        TypeError: If the metrics received from the participant's local training round
+            are not of type `Dict[str, ndarray]`.
     """
 
     # retreive global weights, epochs and epoch base from the coordinator
-    weights: List[ndarray]
+    global_weights: Optional[ndarray]
     epochs: int
     epoch_base: int
-    weights, epochs, epoch_base = start_training_round(channel=channel)
+    global_weights, epochs, epoch_base = start_training_round(channel=channel)
+    if not global_weights.size:
+        global_weights = None
 
     # start a local training round of the participant
-    number_samples: int
-    metrics: Dict[str, ndarray]
-    weights, number_samples, metrics = participant.train_round(
-        weights=weights, epochs=epochs, epoch_base=epoch_base
-    )
+    local_weights: ndarray
+    if global_weights is not None:  # ith training round
+        number_samples: int
+        metrics: Dict[str, ndarray]
+        local_weights, number_samples, metrics = participant.train_round(
+            weights=global_weights, epochs=epochs, epoch_base=epoch_base
+        )
 
-    # data validation
-    is_not_list_weights: bool = not isinstance(weights, List)
-    is_not_ndarray_weights: bool = not all(isinstance(weight, ndarray) for weight in weights)
-    if is_not_list_weights or is_not_ndarray_weights:
-        raise TypeError("Model weights must be of type `List[ndarray]`!")
-    is_not_dict_metrics: bool = not isinstance(metrics, Dict)
-    is_not_str_metrics: bool = not all(isinstance(key, str) for key in metrics.keys())
-    is_not_ndarray_metrics: bool = not all(isinstance(value, ndarray) for value in metrics.values())
-    if is_not_dict_metrics or is_not_str_metrics or is_not_ndarray_metrics:
-        raise TypeError("Metrics must be of type `Dict[str, ndarray]`!")
+        # data validation
+        if not isinstance(local_weights, ndarray):
+            raise TypeError("Model weights must be of type `ndarray`!")
+        if not isinstance(number_samples, int):
+            raise TypeError("Aggregation meta data must be of type `int`!")
+        if number_samples < 0:
+            raise ValueError("Aggregation meta data must be nonnegative!")
+        if (
+            not isinstance(metrics, Dict)
+            or not all(isinstance(key, str) for key in metrics.keys())
+            or not all(isinstance(value, ndarray) for value in metrics.values())
+        ):
+            raise TypeError("Metrics must be of type `Dict[str, ndarray]`!")
 
-    # return updated weights, number of training samples and metrics to the coordinator
-    end_training_round(
-        channel=channel, weights=weights, number_samples=number_samples, metrics=metrics
-    )
+        logger.info("Storing weights", round=round)
+        participant.write_weights(round, local_weights)
+
+        # return updated weights, no. of training samples and metrics to the coordinator
+        end_training_round(
+            channel=channel,
+            weights=local_weights,
+            number_samples=number_samples,
+            metrics=metrics,
+        )
+
+    else:  # 0th training round
+        local_weights, _, _ = participant.train_round(
+            weights=global_weights, epochs=epochs, epoch_base=epoch_base
+        )
+
+        # data validation
+        if not isinstance(local_weights, ndarray):
+            raise TypeError("Model weights must be of type `ndarray`!")
+
+        logger.info("Storing weights", round=round)
+        participant.write_weights(round, local_weights)
+
+        # return initialized weights
+        end_training_round(
+            channel=channel, weights=local_weights, number_samples=0, metrics={}
+        )
 
 
 class StateRecord:
     """Thread-safe record of a participant's state and round number."""
 
     def __init__(  # pylint: disable=redefined-builtin
-        self, state: ParState = ParState.WAITING_FOR_SELECTION, round: int = 0
+        self, state: ParState = ParState.WAITING, round: int = -1
     ) -> None:
         """Initialize the state record.
 
         Args:
-            state (~xain_sdk.participant_state_machine.ParState): The initial state. Defaults to
-                WAITING_FOR_SELECTION.
-            round (int): The initial training round. Defaults to 0.
+            state: The initial state. Defaults to WAITING.
+            round: The initial training round. Defaults to -1.
         """
 
         self.cond: threading.Condition = threading.Condition()
@@ -195,8 +243,7 @@ class StateRecord:
         """Get the state and round number.
 
         Returns:
-            ~typing.Tuple[~xain_sdk.participant_state_machine.ParState, int]: The state and round
-                number.
+            The state and round number.
         """
 
         with self.cond:
@@ -206,7 +253,7 @@ class StateRecord:
         """Update the state.
 
         Args:
-            state (~xain_sdk.participant_state_machine.ParState): The state to update to.
+            state: The state to update to.
         """
 
         with self.cond:
@@ -217,170 +264,171 @@ class StateRecord:
         """Wait until the participant was selected for training or is done.
 
         Returns:
-            ~xain_sdk.participant_state_machine.ParState: The new state the participant is in.
+            The new state the participant is in.
         """
 
         with self.cond:
             self.cond.wait_for(lambda: self.state in {ParState.TRAINING, ParState.DONE})
             return self.state
 
-    def wait_until_next_round(self) -> ParState:
-        """Wait until the participant can start into the next round of training.
-
-        Returns:
-            ~xain_sdk.participant_state_machine.ParState: The new state the participant is in.
-        """
-
-        with self.cond:
-            self.cond.wait_for(
-                lambda: self.state
-                in {ParState.TRAINING, ParState.WAITING_FOR_SELECTION, ParState.DONE}
-            )
-            return self.state
-
 
 def transit(state_record: StateRecord, heartbeat_response: HeartbeatResponse) -> None:
-    """Participant state transition function on a heartbeat response. Updates the state record.
+    """Participant state transition function on a heartbeat response.
+
+    Updates the state record.
 
     Args:
-        state_record (~xain_sdk.participant_state_machine.StateRecord): The updatable state record
-            of the participant.
-        heartbeat_response (~xain_proto.fl.coordinator_pb2.HeartbeatResponse): The heartbeat
-            response from the coordinator.
+        state_record: The updatable state record of the participant.
+        heartbeat_response: The heartbeat response from the coordinator.
     """
 
-    state: State = heartbeat_response.state
-    round: int = heartbeat_response.round  # pylint: disable=redefined-builtin
+    msg: State = heartbeat_response.state
+    global_round: int = heartbeat_response.round
     with state_record.cond:
-        if state_record.state == ParState.WAITING_FOR_SELECTION:
-            if state == State.ROUND:
+        if state_record.state == ParState.WAITING:
+            if msg == State.ROUND and global_round > state_record.round:
                 state_record.state = ParState.TRAINING
-                state_record.round = round
+                state_record.round = global_round
                 state_record.cond.notify()
-            elif state == State.FINISHED:
+                logger.info(
+                    "Transition to training state",
+                    local_state=state_record.state,
+                    local_round=state_record.round,
+                )
+            elif msg == State.FINISHED:
                 state_record.state = ParState.DONE
                 state_record.cond.notify()
-        elif state_record.state == ParState.POST_TRAINING:
-            if state == State.STANDBY:
-                # not selected
-                state_record.state = ParState.WAITING_FOR_SELECTION
-                # prob ok to keep state_record.round as it is
-                state_record.cond.notify()
-            elif state == State.ROUND and round == state_record.round + 1:
-                state_record.state = ParState.TRAINING
-                state_record.round = round
-                state_record.cond.notify()
-            elif state == State.FINISHED:
-                state_record.state = ParState.DONE
-                state_record.cond.notify()
+                logger.info(
+                    "Transition to finished state", local_state=state_record.state,
+                )
+            elif (
+                msg == State.STANDBY
+                or msg == State.ROUND
+                and global_round == state_record.round
+            ):
+                logger.debug(
+                    "Continue in waiting state",
+                    local_round=state_record.round,
+                    heartbeat_message=msg,
+                    heartbeat_round=global_round,
+                )
+            else:
+                logger.warn(
+                    "Unexpected heartbeat response",
+                    local_round=state_record.round,
+                    heartbeat_message=msg,
+                    heartbeat_round=global_round,
+                )
 
 
-def message_loop(channel: Channel, state_record: StateRecord, terminate: threading.Event) -> None:
+def message_loop(
+    channel: Channel, state_record: StateRecord, terminate: threading.Event
+) -> None:
     """Periodically send (and handle) heartbeat messages in a loop.
 
     Args:
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        state_record (~xain_sdk.participant_state_machine.StateRecord): The participant's state
-            record.
-        terminate (~threading.Event): An event to terminate the message loop.
+        channel: A gRPC channel to the coordinator.
+        state_record: The participant's state record.
+        terminate: An event to terminate the message loop.
     """
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
     while not terminate.is_set():
         request = HeartbeatRequest()
         transit(
-            state_record=state_record, heartbeat_response=coordinator.Heartbeat(request=request),
+            state_record=state_record,
+            heartbeat_response=coordinator.Heartbeat(request=request),
         )
         time.sleep(HEARTBEAT_TIME)
 
 
-def start_participant(participant: Participant, coordinator_url: str) -> None:
+def start_participant(
+    participant: Participant,
+    coordinator_url: str,
+    storage_config: Optional[S3StorageConfig] = None,
+) -> None:
     """Top-level function for the participant's state machine.
 
-    After rendezvous and heartbeat initiation, the Participant is WAITING_FOR_SELECTION. When
-    selected, it moves to TRAINING followed by POST_TRAINING. If selected again for the next round,
-    it moves back to TRAINING, otherwise it is back to WAITING_FOR_SELECTION.
+    After rendezvous and heartbeat initiation, the Participant is WAITING. If
+    selected to train for the current round, it moves to TRAINING, otherwise it
+    remains in WAITING. After training is complete for the round, it moves back
+    to WAITING. When there is no more training to be done, it moves to the
+    terminal state DONE.
 
     Args:
-        participant (~xain_sdk.participant.Participant): The participant for local training.
-        coordinator_url (str): The URL of the coordinator to connect to.
+        participant: The participant for local training.
+        storage_config: The storage configuration
+        coordinator_url: The URL of the coordinator to connect to.
     """
 
-    # use insecure channel for now
+    # FIXME(XP-515): the storage feature is highly experimental. In
+    # order to avoid breaking existing setups, we use a dummy store
+    # unless the user provides a valid configuration for using an S3
+    # store.
+    store: AbstractStore = DummyStore()
+    if isinstance(storage_config, S3StorageConfig):
+        store = S3Store(storage_config)
 
+    internal_participant: InternalParticipant = InternalParticipant(participant, store)
+
+    # use insecure channel for now
     with insecure_channel(target=coordinator_url) as channel:  # thread-safe
         rendezvous(channel=channel)
 
         state_record: StateRecord = StateRecord()
         terminate: threading.Event = threading.Event()
-        msg_loop = threading.Thread(target=message_loop, args=(channel, state_record, terminate))
+        msg_loop = threading.Thread(
+            target=message_loop, args=(channel, state_record, terminate)
+        )
         msg_loop.start()
 
-        # in WAITING_FOR_SELECTION state
-        begin_selection_wait(state_record=state_record, channel=channel, participant=participant)
+        # in WAITING state
+        logger.info("rendezvous successful, begin WAITING...")
+        begin_waiting(state_record, channel, internal_participant)
 
-        # possibly several training rounds later... in DONE state
+        # in DONE state
+        logger.info("shutting down participant...")
         terminate.set()
         msg_loop.join()
 
 
-def begin_selection_wait(
-    state_record: StateRecord, channel: Channel, participant: Participant
+def begin_waiting(
+    state_record: StateRecord, channel: Channel, participant: InternalParticipant
 ) -> None:
-    """Perform actions in Participant state WAITING_FOR_SELECTION.
+    """"Perform actions in the Participant state WAITING.
 
     Args:
-        state_record (~xain_sdk.participant_state_machine.StateRecord): The participant's state
-            record.
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        participant (~xain_sdk.participant.Participant): The participant for local training.
+        state_record: The participant's state record.
+        channel: A gRPC channel to the coordinator.
+        participant: The participant for local training.
     """
 
     state: ParState = state_record.wait_until_selected_or_done()
-    if state == ParState.TRAINING:
-        # selected
-        begin_training(state_record=state_record, channel=channel, participant=participant)
+    if state == ParState.TRAINING:  # selected
+        logger.debug("received TRAINING signal")
+        begin_training(state_record, channel, participant)
     elif state == ParState.DONE:
-        pass
+        logger.info("received DONE signal")
+    else:
+        logger.warn("received unknown signal", state_signal=state)
 
 
-def begin_training(state_record: StateRecord, channel: Channel, participant: Participant) -> None:
-    """Perform actions in Participant state TRAINING and POST_TRAINING.
-
-    Args:
-        state_record (~xain_sdk.participant_state_machine.StateRecord): The participant's state
-            record.
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        participant (~xain_sdk.participant.Participant): The participant for local training.
-    """
-
-    # perform the training procedures
-    training_round(channel=channel, participant=participant)
-
-    # move to POST_TRAINING state
-    state_record.update(state=ParState.POST_TRAINING)
-    begin_post_training(state_record, channel, participant)
-
-
-def begin_post_training(
-    state_record: StateRecord, channel: Channel, participant: Participant
+def begin_training(
+    state_record: StateRecord, channel: Channel, participant: InternalParticipant
 ) -> None:
-    """Perform actions in the Participant state POST_TRAINING.
+    """Perform actions in the Participant state TRAINING.
 
     Args:
-        state_record (~xain_sdk.participant_state_machine.StateRecord): The participant's state
-            record.
-        channel (~grpc.Channel): A gRPC channel to the coordinator.
-        participant (~xain_sdk.participant.Participant): The participant for local training.
+        state_record: The participant's state record.
+        channel: A gRPC channel to the coordinator.
+        participant: The participant for local training.
     """
 
-    state: ParState = state_record.wait_until_next_round()
-    if state == ParState.TRAINING:
-        # selected again
-        begin_training(state_record=state_record, channel=channel, participant=participant)
-    elif state == ParState.WAITING_FOR_SELECTION:
-        # not this time
-        begin_selection_wait(state_record=state_record, channel=channel, participant=participant)
-    elif state == ParState.DONE:
-        # that was the last round
-        pass
+    _, local_round = state_record.lookup()
+    # perform training comms and computation
+    training_round(channel, participant, local_round)
+
+    # internal transition back to WAITING
+    logger.debug("trained round, going back to WAITING...")
+    state_record.update(ParState.WAITING)
+    begin_waiting(state_record, channel, participant)
