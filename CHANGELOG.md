@@ -20,6 +20,11 @@ For reference, the possible headings are:
 
 ## [Unreleased]
 
+## [0.5.0] - (UNRELEASED)
+
+Make participants retrieve the latest aggregated weight from an S3 “aggregated weights bucket”.
+Move all configurations to dedicated configuration files.
+
 ## [0.4.0] - 2020-02-04
 
 Flatten model weights instead of using lists.
