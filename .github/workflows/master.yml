@@ -30,19 +30,17 @@ jobs:
 
       - name: black
         run: |
-          black --check setup.py xain_sdk tests
+          black --check setup.py xain_sdk tests examples
 
       - name: isort
         run: |
           isort --check-only --diff --settings-path=.isort.cfg -rc setup.py xain_sdk examples tests
 
       - name: pylint
-        continue-on-error: true
         run: |
           pylint --rcfile=.pylintrc xain_sdk tests
 
       - name: mypy
-        continue-on-error: true
         run: |
           mypy xain_sdk tests
 
