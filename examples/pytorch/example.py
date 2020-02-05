@@ -1,5 +1,6 @@
 """PyTorch example for the SDK Participant implementation."""
 
+import sys
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -8,9 +9,12 @@ from torch import utils
 from torchvision import datasets, transforms
 
 from cnn_class import Net
+from xain_sdk.config import Config, InvalidConfig
+from xain_sdk.logger import StructLogger, get_logger
 from xain_sdk.participant import Participant as ABCParticipant
 from xain_sdk.participant_state_machine import start_participant
-from xain_sdk.store import S3StorageConfig
+
+logger: StructLogger = get_logger(__name__)
 
 
 class Participant(ABCParticipant):
@@ -135,17 +139,14 @@ def main() -> None:
     """Entry point to start a participant."""
 
     participant: Participant = Participant()
-    storage_config: S3StorageConfig = S3StorageConfig(
-        endpoint_url="http://localhost:9000",
-        access_key_id="minio",
-        secret_access_key="minio123",
-        bucket="xain-fl-temporary-weights",
-    )
-    start_participant(
-        participant=participant,
-        coordinator_url="localhost:50051",
-        storage_config=storage_config,
-    )
+
+    try:
+        config = Config.load("config.toml")
+    except InvalidConfig as err:
+        logger.error("Invalid config", error=str(err))
+        sys.exit(1)
+
+    start_participant(participant, config)
 
 
 if __name__ == "__main__":

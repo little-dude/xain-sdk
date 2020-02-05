@@ -1,5 +1,4 @@
 """Module implementing the networked Participant using gRPC."""
-
 from enum import Enum, auto
 import threading
 import time
@@ -23,9 +22,10 @@ from xain_proto.fl.coordinator_pb2_grpc import CoordinatorStub
 from xain_proto.np import ndarray_to_proto, proto_to_ndarray
 from xain_proto.np.ndarray_pb2 import NDArray as pndarray
 
+from xain_sdk.config import Config, CoordinatorConfig, StorageConfig
 from xain_sdk.logger import get_logger
 from xain_sdk.participant import InternalParticipant, Participant
-from xain_sdk.store import AbstractStore, DummyStore, S3StorageConfig, S3Store
+from xain_sdk.store import AbstractStore, NullObjectStore, S3Store
 
 logger = get_logger(__name__)
 
@@ -339,11 +339,7 @@ def message_loop(
         time.sleep(HEARTBEAT_TIME)
 
 
-def start_participant(
-    participant: Participant,
-    coordinator_url: str,
-    storage_config: Optional[S3StorageConfig] = None,
-) -> None:
+def start_participant(participant: Participant, config: Config) -> None:
     """Top-level function for the participant's state machine.
 
     After rendezvous and heartbeat initiation, the Participant is WAITING. If
@@ -354,20 +350,21 @@ def start_participant(
 
     Args:
         participant: The participant for local training.
-        storage_config: The storage configuration
-        coordinator_url: The URL of the coordinator to connect to.
+        config: A valid config.
     """
 
     # FIXME(XP-515): the storage feature is highly experimental. In
-    # order to avoid breaking existing setups, we use a dummy store
-    # unless the user provides a valid configuration for using an S3
-    # store.
-    store: AbstractStore = DummyStore()
-    if isinstance(storage_config, S3StorageConfig):
+    # order to avoid breaking existing setups, we use a null store
+    # unless the user enables the storage feature explicitly.
+    store: AbstractStore = NullObjectStore()
+    storage_config: StorageConfig = config.storage
+    if storage_config.enable:
         store = S3Store(storage_config)
 
     internal_participant: InternalParticipant = InternalParticipant(participant, store)
 
+    coordinator_config: CoordinatorConfig = config.coordinator
+    coordinator_url = f"{coordinator_config.host}:{coordinator_config.port}"
     # use insecure channel for now
     with insecure_channel(target=coordinator_url) as channel:  # thread-safe
         rendezvous(channel=channel)

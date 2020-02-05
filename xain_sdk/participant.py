@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple, TypeVar, cast
 import numpy as np
 from numpy import ndarray
 
-from xain_sdk.store import AbstractStore
+from xain_sdk.store import AbstractStore, NullObjectStore
 
 # Currently, the combination of sphinx_autodoc_typehints and typing.TYPE_CHECKING
 # crashes, see https://github.com/agronholm/sphinx-autodoc-typehints/issues/22.
@@ -195,12 +195,14 @@ class InternalParticipant:
         store: A client for a storage service.
     """
 
-    def __init__(self, participant: Participant, store: AbstractStore):
+    def __init__(
+        self, participant: Participant, store: AbstractStore = NullObjectStore()
+    ):
         """Initialize the internal representation of a participant.
 
         Args:
             participant: A user provided implementation of a participant.
-            store: A client for a storage service.
+            store: A client for a storage service. Defaults to `NullObjectStore()`.
         """
 
         self.participant: Participant = participant

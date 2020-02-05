@@ -1,0 +1,19 @@
+[coordinator]
+host = "localhost"
+port = 50051
+
+[coordinator.grpc_options]
+# Maximum message length that the channel can receive. -1 means unlimited. 
+"grpc.max_receive_message_length" = -1
+# Maximum message length that the channel can send. -1 means unlimited. 
+"grpc.max_send_message_length" = -1
+
+[storage]
+enable = false
+endpoint = "http://minio-dev:9000"
+bucket = "xain-fl-aggregated-weights"
+access_key_id = "minio"
+secret_access_key = "minio123"
+
+[logging]
+level = "info"

@@ -29,6 +29,9 @@ install_requires = [
     "structlog~=19.2",  # Apache License 2.0 & MIT License
     "xain-proto==0.4.0",  # Apache License 2.0
     "boto3~=1.10",  # Apache License 2.0
+    "toml==0.10.0",  # MIT
+    "schema~=0.7",  # MIT
+    "idna==2.8",  # BSD
 ]
 
 dev_require = [

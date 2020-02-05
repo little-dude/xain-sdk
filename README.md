@@ -109,10 +109,13 @@ from participant import MyParticipant
 # Create a new participant
 p = MyParticipant()
 
-# Register your new participant to interact with XAIN Coordinator (hosted at XAIN Platform or self-hosted solution). The function start_participant requires two arguments:
+# Register your new participant to interact with XAIN Coordinator 
+# (hosted at XAIN Platform or self-hosted solution). 
+# The function start_participant requires two arguments:
 #   - your new participant to register to interact with Coordinator,
-#   - the URL of the Coordinator to connect to. 
-start_participant(p, "your_host:your_port")
+#   - a valid configuration (an example configuration can be found in config/example-config.toml).
+config = Config.load("my_config.toml")
+start_participant(p, config)
 ```
 
 Now you have registered a participant. Simply repeat this step for all the participants you wish to register.

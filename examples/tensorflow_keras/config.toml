@@ -1,0 +1,13 @@
+[coordinator]
+host = "localhost"
+port = 50051
+
+[storage]
+enable = false
+endpoint = "http://minio-dev:9000"
+bucket = "xain-fl-aggregated-weights"
+access_key_id = "minio"
+secret_access_key = "minio123"
+
+[logging]
+level = "info"
