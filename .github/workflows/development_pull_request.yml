@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - development
-
 jobs:
   development_lint_and_test:
     runs-on: ubuntu-18.04
@@ -31,19 +30,19 @@ jobs:
 
       - name: black
         run: |
-          black --check setup.py xain_fl tests
+          black --check setup.py xain_sdk tests examples
 
       - name: isort
         run: |
-          isort --check-only --diff --settings-path=.isort.cfg -rc setup.py xain_fl tests
+          isort --check-only --diff --settings-path=.isort.cfg -rc setup.py xain_sdk tests examples
 
       - name: pylint
         run: |
-          pylint --rcfile=.pylintrc xain_fl tests
+          pylint --rcfile=.pylintrc xain_sdk tests
 
       - name: mypy
         run: |
-          mypy xain_fl tests
+          mypy xain_sdk tests
 
       - name: Sphinx check
         env:
