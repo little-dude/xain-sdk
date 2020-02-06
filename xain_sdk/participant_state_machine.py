@@ -336,7 +336,7 @@ def message_loop(
             state_record=state_record,
             heartbeat_response=coordinator.Heartbeat(request=request),
         )
-        time.sleep(HEARTBEAT_TIME)
+        terminate.wait(timeout=HEARTBEAT_TIME)
 
 
 def start_participant(participant: Participant, config: Config) -> None:
@@ -365,6 +365,7 @@ def start_participant(participant: Participant, config: Config) -> None:
 
     coordinator_config: CoordinatorConfig = config.coordinator
     coordinator_url = f"{coordinator_config.host}:{coordinator_config.port}"
+
     # use insecure channel for now
     with insecure_channel(target=coordinator_url) as channel:  # thread-safe
         rendezvous(channel=channel)
@@ -378,12 +379,13 @@ def start_participant(participant: Participant, config: Config) -> None:
 
         # in WAITING state
         logger.info("rendezvous successful, begin WAITING...")
-        begin_waiting(state_record, channel, internal_participant)
-
-        # in DONE state
-        logger.info("shutting down participant...")
-        terminate.set()
-        msg_loop.join()
+        try:
+            begin_waiting(state_record, channel, internal_participant)
+        finally:
+            # in DONE state
+            logger.info("shutting down participant...")
+            terminate.set()
+            msg_loop.join()
 
 
 def begin_waiting(
