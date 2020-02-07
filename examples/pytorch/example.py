@@ -67,8 +67,7 @@ class Participant(ABCParticipant):
             weights (~typing.Optional[~numpy.ndarray]): The weights of the model to be
                 trained.
             epochs (int): The number of epochs to be trained.
-            epoch_base (int): The epoch base number for the optimizer state (in case of
-                epoch dependent optimizer parameters).
+            epoch_base: The global training epoch number.
 
         Returns:
             ~typing.Tuple[~numpy.ndarray, int, ~typing.Dict[str, ~numpy.ndarray]]: The

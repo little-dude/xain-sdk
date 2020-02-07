@@ -34,7 +34,7 @@ train_round(self, weights: Optional[np.ndarray], epochs: int, epoch_base: int)
 The expected arguments are:
 - `weights (Optional[np.ndarray])`: Either a Numpy array containing the flattened weights of the global model or None. In the latter case the participant must properly initialize the weights instead of loading them.
 - `epochs (int)`: The number of epochs to be trained during the federated learning round. Can be any non-negative number including zero.
-- `epoch_base (int)`: An epoch base number in case the state of the training optimizer is dependent on the overall epoch (e.g. for learning rate schedules).
+- `epoch_base (int)`: A global training epoch number (e.g. for epoch dependent learning rate schedules and metrics logging).
 
 The expected return values are:
 - `np.ndarray`: The flattened weights of the local model which results from the global model after certain `epochs` of training on local data.
