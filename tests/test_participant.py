@@ -27,10 +27,10 @@ def participant() -> Participant:
 
         def train_round(
             self, weights: Optional[np.ndarray], epochs: int, epoch_base: int
-        ) -> Tuple[np.ndarray, int, Dict[str, np.ndarray]]:
+        ) -> Tuple[np.ndarray, int]:
             """Dummy train round."""
 
-            return weights, 0, {}
+            return weights, 0
 
     return TestParticipant()
 

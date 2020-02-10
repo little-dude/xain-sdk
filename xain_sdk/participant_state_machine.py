@@ -2,7 +2,7 @@
 from enum import Enum, auto
 import threading
 import time
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 from grpc import Channel, insecure_channel
 from numpy import ndarray
@@ -20,7 +20,6 @@ from xain_proto.fl.coordinator_pb2 import (
 )
 from xain_proto.fl.coordinator_pb2_grpc import CoordinatorStub
 from xain_proto.np import ndarray_to_proto, proto_to_ndarray
-from xain_proto.np.ndarray_pb2 import NDArray as pndarray
 
 from xain_sdk.config import Config, CoordinatorConfig, StorageConfig
 from xain_sdk.logger import get_logger
@@ -99,7 +98,7 @@ def start_training_round(channel: Channel) -> Tuple[ndarray, int, int]:
 
 
 def end_training_round(
-    channel: Channel, weights: ndarray, number_samples: int, metrics: Dict[str, ndarray]
+    channel: Channel, weights: ndarray, number_samples: int, metrics: str
 ) -> None:
     """Start a training round completion exchange with a coordinator.
 
@@ -114,18 +113,10 @@ def end_training_round(
     """
 
     coordinator: CoordinatorStub = CoordinatorStub(channel=channel)
-
-    # model weight arrays as protobuf message
-    weights_proto: pndarray = ndarray_to_proto(weights)
-
-    # metric data containing the metric names mapped to arrays as protobuf message
-    metrics_proto: Dict[str, pndarray] = {
-        key: ndarray_to_proto(value) for key, value in metrics.items()
-    }
-
-    # assembling a request with the update of the weights and the metrics
     request: EndTrainingRoundRequest = EndTrainingRoundRequest(
-        weights=weights_proto, number_samples=number_samples, metrics=metrics_proto
+        weights=ndarray_to_proto(weights),
+        number_samples=number_samples,
+        metrics=metrics,
     )
     response: EndTrainingRoundResponse = coordinator.EndTrainingRound(request=request)
     logger.info("Participant received", response_type=type(response))
@@ -156,7 +147,7 @@ def training_round(
         ValueError: If the aggregation meta data received from the participant's local
             training round is negative.
         TypeError: If the metrics received from the participant's local training round
-            are not of type `Dict[str, ndarray]`.
+            are not of type `str`.
     """
 
     # retreive global weights, epochs and epoch base from the coordinator
@@ -171,7 +162,7 @@ def training_round(
     local_weights: ndarray
     if global_weights is not None:  # ith training round
         number_samples: int
-        metrics: Dict[str, ndarray]
+        metrics: str
         local_weights, number_samples, metrics = participant.train_round(
             weights=global_weights, epochs=epochs, epoch_base=epoch_base
         )
@@ -183,12 +174,8 @@ def training_round(
             raise TypeError("Aggregation meta data must be of type `int`!")
         if number_samples < 0:
             raise ValueError("Aggregation meta data must be nonnegative!")
-        if (
-            not isinstance(metrics, Dict)
-            or not all(isinstance(key, str) for key in metrics.keys())
-            or not all(isinstance(value, ndarray) for value in metrics.values())
-        ):
-            raise TypeError("Metrics must be of type `Dict[str, ndarray]`!")
+        if not isinstance(metrics, str):
+            raise TypeError("Metrics must be of type `str`!")
 
         logger.info("Storing weights", round=round)
         participant.write_weights(round, local_weights)
@@ -215,7 +202,7 @@ def training_round(
 
         # return initialized weights
         end_training_round(
-            channel=channel, weights=local_weights, number_samples=0, metrics={}
+            channel=channel, weights=local_weights, number_samples=0, metrics=""
         )
 
 

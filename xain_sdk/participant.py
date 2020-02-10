@@ -1,6 +1,7 @@
 """Participant API"""
 
 from abc import ABC, abstractmethod
+import json
 import time
 from typing import Any, Dict, List, Optional, Tuple, TypeVar, cast
 import uuid
@@ -36,13 +37,15 @@ class Participant(ABC):
     @abstractmethod
     def train_round(
         self, weights: Optional[ndarray], epochs: int, epoch_base: int
-    ) -> Tuple[ndarray, int, Dict[str, ndarray]]:
+    ) -> Tuple[ndarray, int]:
         """Train a model in a federated learning round.
 
         A model is given in terms of its weights and the model is trained on the
         participant's dataset for a number of epochs. The weights of the updated model
-        are returned in combination with the number of samples of the train dataset and
-        some gathered metrics.
+        are returned in combination with the number of samples of the train dataset.
+
+        Any metrics that should be returned to the coordinator must be gathered via the
+        participant's update_metrics() utility method per epoch.
 
         If the weights given are None, then the participant is expected to initialize
         the weights according to its model definition and return them without training.
@@ -53,8 +56,7 @@ class Participant(ABC):
             epoch_base: The global training epoch number.
 
         Returns:
-            The updated model weights, the number of training samples and the gathered
-                metrics.
+            The updated model weights and the number of training samples.
         """
 
     @staticmethod
@@ -230,6 +232,9 @@ class Participant(ABC):
 
             Returns:
                 ~typing.Dict[str, float]: The updated fields.
+
+            Raises:
+                TypeError: If the metric values are not convertible to float.
             """
 
             for key, value in kwargs.items():
@@ -237,12 +242,15 @@ class Participant(ABC):
                 try:
                     fields = get_fields(
                         fields,
-                        **{f"{key}_{idx}": val for idx, val in enumerate(iter(value))},
+                        **{f"{key}_{idx}": val for idx, val in enumerate(value)},
                     )
 
                 # add a metric field for scalar values
-                except TypeError:
-                    fields[key] = float(value)
+                except TypeError:  # failed to enumerate value
+                    try:
+                        fields[key] = float(value)
+                    except TypeError:  # failed to cast value to float
+                        raise TypeError("Metric values must be convertible to float!")
 
             return fields
 
@@ -259,8 +267,7 @@ class Participant(ABC):
 
 
 class InternalParticipant:
-    """Internal representation of a participant that encapsulates the
-    user-defined Participant class.
+    """Internal representation that encapsulates the user-defined Participant class.
 
     Args:
         participant: A user provided implementation of a participant.
@@ -282,24 +289,33 @@ class InternalParticipant:
 
     def train_round(
         self, weights: Optional[ndarray], epochs: int, epoch_base: int
-    ) -> Tuple[ndarray, int, Dict[str, ndarray]]:
-        """A wrapper for :py:meth:`~xain_sdk.participant.Participant.train_round`."""
+    ) -> Tuple[ndarray, int, str]:
+        """Wrap the user provided participant train_round() method.
+
+        The metrics gathered by the user are passed along as a JSON string.
+
+        Args:
+            weights: The weights of the model to be trained.
+            epochs: The number of epochs to be trained.
+            epoch_base: The global training epoch number.
+
+        Returns:
+            The updated model weights, the number of training samples and the metrics.
+        """
 
         # reset the metrics
         self.participant.metrics = {}
 
         # execute local training
         aggregation_data: int
-        metrics: Dict[str, ndarray]
-        weights, aggregation_data, metrics = self.participant.train_round(
+        weights, aggregation_data = self.participant.train_round(
             weights=weights, epochs=epochs, epoch_base=epoch_base
         )
 
         # finalize the metrics
-        # TODO(PB-394): make use of this as a JSON return value
-        unused_json_metrics: List[Dict] = [
-            metric for metric in self.participant.metrics.values()
-        ]
+        metrics: str = json.dumps(
+            [metric for metric in self.participant.metrics.values()]
+        )
 
         return weights, aggregation_data, metrics
 

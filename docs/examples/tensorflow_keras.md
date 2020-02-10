@@ -22,8 +22,7 @@ class Participant(ABCParticipant):
 and must implement the `train_round()` method in order to be able to execute a round of federated learning, where each round consists of a certain number of epochs. This method adheres to the function signature
 
 ```python
-train_round(self, weights: Optional[np.ndarray], epochs: int, epoch_base: int)
--> Tuple[np.ndarray, int, Dic[str, np.ndarray]]
+train_round(self, weights: Optional[np.ndarray], epochs: int, epoch_base: int) -> Tuple[np.ndarray, int]
 ```
 
 The expected arguments are:
@@ -35,7 +34,6 @@ The expected arguments are:
 The expected return values are:
 - `np.ndarray`: The flattened weights of the local model which results from the global model after certain `epochs` of training on local data.
 - `int`: The number of samples in the train dataset used for aggregation strategies.
-- `Dict[str, np.ndarray]`: The metrics gathered during the training. This might be an empty dictionary if the `Coordinator` is not supposed to collect the metrics.
 
 The `Participant`'s base class provides utility methods to set the weights of the local model according to the given flat weights vector, by
 
@@ -55,10 +53,18 @@ as well as the original shapes of the weights of the local model, by
 get_tensorflow_shapes(model: tf.keras.Model) -> List[Tuple[int, ...]]
 ```
 
+Also, metrics of the current training epoch can be send to a time series data base via the coordinator by
+
+```python
+update_metrics(epoch, epoch_base, MetricName=metric_value, ...)
+```
+
+for any number of metrics.
+
 
 ## TF Keras Model
 
-A TF Keras model might either be loaded from a file, generated during the initialization of the `Participant`, or even generated on the fly in a `train_round()`. Here, we present a simple dense neural network for classification generated during the `Participant`'s initialization. The example model consists of an input layer holding 10 parameters per sample, as
+A TF Keras model definition might either be loaded from a file, generated during the initialization of the `Participant`, or even generated on the fly in a `train_round()`. Here, we present a simple dense neural network for classification generated during the `Participant`'s initialization. The example model consists of an input layer holding 10 parameters per sample, as
 
 ```python
 input_layer: Tensor = Input(shape=(10,), dtype="float32")
@@ -136,29 +142,18 @@ if weights is not None:
 Next, the local model is trained for certain `epochs` on the local data, whereby the metrics are gathered in each epoch, as
 
 ```python
-number_samples = 80
-metrics_per_epoch: List[List[np.ndarray]] = []
-for _ in range(epochs):
+number_samples: int = 80
+for epoch in range(epochs):
     self.model.fit(x=self.trainset, verbose=2, shuffle=False)
-    metrics_per_epoch.append(self.model.evaluate(x=self.valset, verbose=0))
+    metrics: List[np.ndarray] = self.model.evaluate(x=self.valset, verbose=0)
+    self.update_metrics(epoch, epoch_base, Loss=metrics[0], Accuracy=metrics[1])
 ```
 
-The metrics are transformed into a dictionary, which maps metric names to the gathered metric values, by
-
-```python
-metrics = {
-    name: np.stack(np.atleast_1d(*metric))
-    for name, metric in zip(self.model.metrics_names, zip(*metrics_per_epoch))
-}
-```
-
-This explicit training loop is due to the Tensorflow v1 datasets and their handling in `fit()` and `evaluate()`. Hence a Tensorflow v2 approach would reduce to a single call to `fit()` additionally specifying the validation data and number of epochs. The metrics could then for example be gathered from the history dictionary returned by `fit()`.
-
-Finally, the updated weights of the local model, the number of samples of the train dataset and the gathered metrics are returned, as
+Finally, the updated weights of the local model and the number of samples of the train dataset are returned, as
 
 ```python
 weights = self.get_tensorflow_weights(model=self.model)
-return weights, number_samples, metrics
+return weights, number_samples
 ```
 
 If there are no weights provided, then the participant initializes new weights according to its model definition and returns them without further training, as
@@ -167,5 +162,4 @@ If there are no weights provided, then the participant initializes new weights a
 else:
     self.init_model()
     number_samples = 0
-    metrics = {}
 ```

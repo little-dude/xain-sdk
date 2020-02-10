@@ -27,8 +27,7 @@ class Participant(ABCParticipant):
 and must implement the `train_round()` method in order to be able to execute a round of Federated Learning, where each round consists of a certain number of epochs. This method adheres to the function signature
 
 ```python
-train_round(self, weights: Optional[np.ndarray], epochs: int, epoch_base: int)
--> Tuple[np.ndarray, int, Dict[str, np.ndarray]]
+train_round(self, weights: Optional[np.ndarray], epochs: int, epoch_base: int) -> Tuple[np.ndarray, int]
 ```
 
 The expected arguments are:
@@ -39,7 +38,6 @@ The expected arguments are:
 The expected return values are:
 - `np.ndarray`: The flattened weights of the local model which results from the global model after certain `epochs` of training on local data.
 - `int`: The number of samples in the train dataset used for aggregation strategies.
-- `Dict[str, np.ndarray]`: The metrics gathered during the training. This might be an empty dictionary if the `Coordinator` is not supposed to collect the metrics.
 
 The `Participant`'s base class provides utility methods to set the weights of the local model according to the given flat weights vector, by
 
@@ -58,6 +56,14 @@ as well as the original shapes of the weights of the local model, by
 ```python
 get_pytorch_shapes(model: torch.nn.Module) -> List[Tuple[int, ...]]
 ```
+
+Also, metrics of the current training epoch can be send to a time series data base via the coordinator by
+
+```python
+update_metrics(epoch, epoch_base, MetricName=metric_value, ...)
+```
+
+for any number of metrics.
 
 
 ## PyTorch Model 
@@ -172,21 +178,16 @@ if weights is not None:
 Next, the local model is trained for certain `epochs` on the local data, whereby the metrics are gathered in each epoch, as
 
 ```python
-number_samples = len(self.trainloader)
+number_samples: int = len(self.trainloader)
+# TODO: return metric values from `train_n_epochs`
 self.model.train_n_epochs(self.trainloader, epochs)
 ```
 
-The metrics are transformed into a dictionary, which maps metric names to the gathered metric values, by
-
-```python
-metrics = self.model.evaluate_on_test(self.testloader))
-```
-
-Finally, the updated weights of the local model, the number of samples of the train dataset and the gathered metrics are returned, as
+Finally, the updated weights of the local model and the number of samples of the train dataset are returned, as
 
 ```python
 weights = self.get_pytorch_weights(model=self.model)
-return weights, number_samples, metrics
+return weights, number_samples
 ```
 
 If there are no weights provided, then the participant initializes new weights according to its model definition and returns them without further training, as
@@ -195,5 +196,4 @@ If there are no weights provided, then the participant initializes new weights a
 else:
     self.init_model()
     number_samples = 0
-    metrics = {}
 ```

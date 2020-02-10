@@ -24,9 +24,9 @@ global model, and the sending of the latter model to storage or other entities.
 The source code in this project implements the XAIN SDK to provide your local application a way to communicate with the XAIN Coordinator.
 
 
-## Getting started
+## Getting Started
 
-### Run the XAIN Coordinator
+### Run The XAIN Coordinator
 
 There are two options to run the XAIN Coordinator to perform Federated Learning on locally trained models: 
 
@@ -34,9 +34,9 @@ There are two options to run the XAIN Coordinator to perform Federated Learning 
 - For the self-hosted solution, see [XAIN FL Project](https://github.com/xainag/xain-fl) for more details.
 
 
-### Integrate the XAIN SDK into your project
+### Integrate The XAIN SDK Into Your Project
 
-#### 1. Install the XAIN SDK
+#### 1. Install The XAIN SDK
 
 To install the XAIN SDK package on your machine, simply run in your terminal:
 
@@ -45,7 +45,7 @@ pip install xain-sdk
 ```
 
 
-#### 2. Register your application and the device to participate in the aggregation
+#### 2. Register Your Application And The Device To Participate In The Aggregation
 
 Now you can register your Participants to participate in the Federated Learning rounds. To do so, 
 just send the registration request to the XAIN Coordinator:
@@ -54,7 +54,7 @@ just send the registration request to the XAIN Coordinator:
 ###### participant.py
 
 ```python
-from typing import Dict, List, Tuple
+from typing import Optional, Tuple
 from numpy import ndarray
 from xain_sdk.participant import Participant
 
@@ -64,37 +64,33 @@ class MyParticipant(Participant):
         super(MyParticipant, self).__init__()
 
         # define or load a model to be trained
-        ...
+        self.model = ...
+        self.model_shapes = self.get_<MLframework>_shapes(self.model)
 
         # define or load data to be trained on
-        ...
+        self.trainset = ...
 
     def train_round(
-        self, weights: List[ndarray], epochs: int, epoch_base: int
-    ) -> Tuple[List[ndarray], int, Dict[str, ndarray]]:
+        self, weights: Optional[ndarray], epochs: int, epoch_base: int
+    ) -> Tuple[ndarray, int]:
 
-        number_samples: int
-        metrics: Dict[str, ndarray]
-        
-        if weights:
+        if weights is not None:
             # load weights into the model
-            ...
+            self.set_<MLframework>_weights(weights, self.model_shapes, self.model)
 
             # train the model for the specified number of epochs
-            weights = ...
-            
-            # gather the number of training samples and the metrics of the trained epochs
             number_samples = ...
-            metrics = ...
+            for epoch in range(epochs):
+                ... # training
+                self.update_metrics(epoch, epoch_base, MetricName=metric_value, ...)
 
         else:
             # initialize new weights for the model
-            weights = ...
-            number_samples = 0
-            metrics = {}
+            ...
 
-        # return the updated weights, number of train samples and gathered metrics
-        return weights, number_samples, metrics
+        # return the updated weights and the number of training samples
+        weights = self.get_<MLframework>_weights(self.model)
+        return weights, number_samples
 ```
 
 
@@ -125,21 +121,6 @@ The XAIN Coordinator will take care of the rest:
 - Triggering new training rounds for the selected participants and aggregating these models.
 
 
-#### Model metrics
-
-A monitoring feature, which will be available as a [XAIN Platform solution](https://www.xain.io/federated-learning-platform). If you would like to compare the performance of aggregated models, please send the specific metrics of your use case that you wish to monitor to the XAIN Coordinator. This will then be reflected in the web interface under the `Project Management` tab. In order to send your metrics to the XAIN Coordinator, you will need to update the `train_round()` method accordingly.
-
-The returned `metrics` dictionary expects `str`s as chosen names of the metrics, which are mapped to `ndarray`s as values of the metrics. The first dimension of the `ndarray` should refer to the trained `epochs` of the current round and the following dimensions to the metric values per epoch. For example, a scalar-sized metric like the loss will result in a `ndarray` of shape `(epochs, 1)` and a vector-sized metric like accuracy per category will result in a `ndarray` of shape `(epochs, number_of_categories)`. But in general, any metric of any positive dimension will be accepted. The `metrics` object then might for example look like
-
-```python
-metrics = {
-    "loss": loss_array,
-    "accuracy": accuracy_array,
-    "accuracy_per_category": accuracy_per_category_array,
-}
-```
-
-
 #### Utility
 
 The `Participant` base class provide some utility methods to help with the implementation of the `train_round()` method, namely:
@@ -149,6 +130,20 @@ The `Participant` base class provide some utility methods to help with the imple
 - `set_pytorch_weights()`: Set the weights of a Pytorch model from a flat weight vector.
 - `get_pytorch_weights()`: Get and flatten the weights of a Pytorch model.
 - `get_pytorch_shapes()`: Get the shapes of the weights of a Pytorch model.
+- `update_metrics()`: Gather metrics to be send to the coordinator.
+
+
+#### Model Metrics
+
+A monitoring feature, which will be available as a [XAIN Platform solution](https://www.xain.io/federated-learning-platform). If you would like to compare the performance of aggregated models, please send the specific metrics of your use case that you wish to monitor to the XAIN Coordinator. This will then be reflected in the web interface under the `Project Management` tab.
+
+In order to send your metrics to the XAIN Coordinator, you can simply add the following line to the training loop in the `train_round()` method
+
+```python
+self.update_metrics(epoch, epoch_base, MetricName=metric_value, ...)
+```
+
+where `epoch` is the current local epoch number, `epoch_base` is the global epoch number and `MetricName=metric_value` can be any number of key-value pairs with a name of a metric as key and a numerical scalar/list/array as value.
 
 
 ## Examples

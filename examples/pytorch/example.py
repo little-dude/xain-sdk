@@ -1,7 +1,7 @@
 """PyTorch example for the SDK Participant implementation."""
 
 import sys
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -52,31 +52,27 @@ class Participant(ABCParticipant):
 
     def train_round(  # pylint: disable=unused-argument
         self, weights: Optional[np.ndarray], epochs: int, epoch_base: int
-    ) -> Tuple[np.ndarray, int, Dict[str, np.ndarray]]:
+    ) -> Tuple[np.ndarray, int]:
         """Train a model in a federated learning round.
 
         A model is given in terms of its weights and the model is trained on the
         participant's dataset for a number of epochs. The weights of the updated model
-        are returned in combination with the number of samples of the train dataset and
-        some gathered metrics.
+        are returned in combination with the number of samples of the train dataset.
+
+        Any metrics that should be returned to the coordinator must be gathered via the
+        participant's update_metrics() utility method per epoch.
 
         If the weights given are None, then the participant is expected to initialize
         the weights according to its model definition and return them without training.
 
         Args:
-            weights (~typing.Optional[~numpy.ndarray]): The weights of the model to be
-                trained.
-            epochs (int): The number of epochs to be trained.
+            weights: The weights of the model to be trained.
+            epochs: The number of epochs to be trained.
             epoch_base: The global training epoch number.
 
         Returns:
-            ~typing.Tuple[~numpy.ndarray, int, ~typing.Dict[str, ~numpy.ndarray]]: The
-                updated model weights, the number of training samples and the gathered
-                metrics.
+            The updated model weights and the number of training samples.
         """
-
-        number_samples: int
-        metrics: Dict[str, np.ndarray]
 
         if weights is not None:
             # load the weights of the global model into the local model
@@ -85,19 +81,18 @@ class Participant(ABCParticipant):
             )
 
             # train the local model for the specified no. of epochs and gather metrics
-            number_samples = len(self.trainloader)
+            number_samples: int = len(self.trainloader)
+            # TODO: return metric values from `train_n_epochs`
             self.model.train_n_epochs(self.trainloader, epochs)
-            metrics = {}  # TODO: return metric values from `train_n_epochs`
 
         else:
             # initialize the weights of the local model
             self.init_model()
             number_samples = 0
-            metrics = {}
 
-        # return the updated model weights, the number of train samples and the metrics
+        # return the updated model weights, the number of training samples
         weights = self.get_pytorch_weights(model=self.model)
-        return weights, number_samples, metrics
+        return weights, number_samples
 
     def init_model(self) -> None:
         """Initialize a model."""
