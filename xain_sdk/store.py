@@ -4,8 +4,8 @@ It currently only works with services that provides the AWS S3 APIs.
 """
 
 import abc
+from io import BytesIO
 import pickle
-from typing import List
 
 import boto3
 from numpy import ndarray
@@ -13,70 +13,137 @@ from numpy import ndarray
 from xain_sdk.config import StorageConfig
 
 
-class AbstractStore(abc.ABC):
-    """An abstract class that defines the API a store must implement."""
+class AbstractLocalWeightsWriter(abc.ABC):
+    # pylint: disable=too-few-public-methods
 
-    # TODO(XP-515): in the future, this method's parameters will
-    # differ. For instance it needs to take
+    """An abstract class that defines the API for storing the local
+    weights after training.
+
+    """
+
     @abc.abstractmethod
-    def write_weights(self, round: int, weights: ndarray) -> None:
+    def write_weights(self, participant_id: str, round: int, weights: ndarray) -> None:
         """Store the given `weights`, corresponding to the given `round`.
 
         Args:
-            round: The round number the weights correspond to.
+
+            participant_id: ID of the participant.
+            round: A round number the weights correspond to.
             weights: The weights to store.
         """
 
 
-class S3Store(AbstractStore):
-    """A store for services that offer the AWS S3 API.
+class AbstractGlobalWeightsReader(abc.ABC):
+    # pylint: disable=too-few-public-methods
+
+    """An abstract class that defines the API for retrieving the global
+    weights before training.
+
+    """
+
+    @abc.abstractmethod
+    def read_weights(self, round: int) -> ndarray:
+        """Retrieve the global weights for the given round.
+
+        Args:
+
+            round: A round number the weights correspond to. Not used.
+        """
+
+
+class NullObjectLocalWeightsWriter(AbstractLocalWeightsWriter):
+    # pylint: disable=too-few-public-methods
+    """An implementation of ``AbstractLocalWeightsWriter`` that does
+    nothing.
+
+    """
+
+    def write_weights(self, participant_id: str, round: int, weights: ndarray) -> None:
+        """A dummy method that has no effect.
+
+        Args:
+            participant_id: ID of the participant. Not used.
+            round: A round number the weights correspond to. Not used.
+            weights: The weights to store. Not used.
+        """
+
+
+class NullObjectGlobalWeightsReader(AbstractGlobalWeightsReader):
+    # pylint: disable=too-few-public-methods
+    """An implementation of ``AbstractGlobalWeightsReader`` that does
+    nothing.
+    """
+
+    def read_weights(self, round: int) -> ndarray:
+        """A dummy method that has no effect.
+
+        Args:
+
+            round: A round number the weights correspond to. Not used.
+        """
+
+
+class S3BaseClass:
+    # pylint: disable=too-few-public-methods
+    """A base class for implementating AWS S3 clients.
 
     Args:
-        config: The storage configuration (endpoint URL, credentials, etc.).
-        s3: The S3 bucket.
+        config: the storage configuration (endpoint URL, credentials, etc.)
+
     """
 
     def __init__(self, config: StorageConfig):
-        """Initialize the S3 storage.
-
-        Args:
-            config: The storage configuration.
-        """
-
-        self.config: StorageConfig = config
+        self.config = config
         self.s3 = boto3.resource(  # pylint: disable=invalid-name
             "s3",
-            endpoint_url=self.config.endpoint_url,
+            endpoint_url=self.config.endpoint,
             aws_access_key_id=self.config.access_key_id,
             aws_secret_access_key=self.config.secret_access_key,
-            region_name="dummy",  # FIXME(XP-515): not sure what this should be for now
+            # FIXME: not sure what this should be for now
+            region_name="dummy",
         )
 
-    def write_weights(self, round: int, weights: ndarray) -> None:
+
+class S3LocalWeightsWriter(AbstractLocalWeightsWriter, S3BaseClass):
+    # pylint: disable=too-few-public-methods
+
+    """``AbstractLocalWeightsWriter`` implementor for AWS S3 storage
+    backend.
+
+    """
+
+    def write_weights(self, participant_id: str, round: int, weights: ndarray) -> None:
         """Store the given `weights`, corresponding to the given `round`.
 
         Args:
-            round: The round number the weights correspond to.
+            participant_id: ID of the participant.
+            round: A round number the weights correspond to.
             weights: The weights to store.
         """
-
-        bucket = self.s3.Bucket(self.config.bucket)
-        bucket.put_object(
-            Body=pickle.dumps(weights), Key=f"{self.config.directory}/{round}"
-        )
+        bucket = self.s3.Bucket(self.config.local_weights_bucket)
+        bucket.put_object(Body=pickle.dumps(weights), Key=f"{participant_id}/{round}")
 
 
-# FIXME(XP-515): Storage is a highly experimental feature so we do not
-# want to enable by default. Therefore, we provide this dummy class
-# that can be used by participants that do not want to use a real
-# storage service.
-class NullObjectStore(AbstractStore):
-    """A dummy store that does not do anything."""
+class S3GlobalWeightsReader(AbstractGlobalWeightsReader, S3BaseClass):
+    # pylint: disable=too-few-public-methods
 
-    def write_weights(self, round: int, weights: List[ndarray]) -> None:
-        """Return without doing anything.
+    """``AbstractGlobalWeightsReader`` implementor for AWS S3 storage
+    backend.
+
+    """
+
+    def read_weights(self, round: int) -> ndarray:
+        """Download the global weights
 
         Args:
-            round: The round number the weights correspond to (unused).
-            weights: The weights to store (unused).
+            round: round number the weights correspond to
+
+        Return:
+            The weights read from the S3 bucket.
         """
+        bucket = self.s3.Bucket(self.config.participants_bucket)
+        data = BytesIO()
+        bucket.download_fileobj(str(round), data)
+        # FIXME: not sure whether getvalue() copies the data. If so we
+        # should probably prefer getbuffer() instead.
+        return pickle.loads(data.getvalue())

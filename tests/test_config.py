@@ -104,7 +104,8 @@ def test_invalid_logging_config(
     )
 
 
-def test_load_valid_config(  # pylint: disable=redefined-outer-name
+def test_load_valid_config(
+    # pylint: disable=redefined-outer-name
     config_sample: dict,
 ) -> None:
     """

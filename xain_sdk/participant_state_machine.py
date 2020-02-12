@@ -24,7 +24,13 @@ from xain_proto.np import ndarray_to_proto, proto_to_ndarray
 from xain_sdk.config import Config, CoordinatorConfig, StorageConfig
 from xain_sdk.logger import get_logger
 from xain_sdk.participant import InternalParticipant, Participant
-from xain_sdk.store import AbstractStore, NullObjectStore, S3Store
+from xain_sdk.store import (
+    AbstractGlobalWeightsReader,
+    AbstractLocalWeightsWriter,
+    NullObjectGlobalWeightsReader,
+    NullObjectLocalWeightsWriter,
+    S3LocalWeightsWriter,
+)
 
 logger = get_logger(__name__)
 
@@ -343,12 +349,15 @@ def start_participant(participant: Participant, config: Config) -> None:
     # FIXME(XP-515): the storage feature is highly experimental. In
     # order to avoid breaking existing setups, we use a null store
     # unless the user enables the storage feature explicitly.
-    store: AbstractStore = NullObjectStore()
+    local_weights_writer: AbstractLocalWeightsWriter = NullObjectLocalWeightsWriter()
+    global_weights_reader: AbstractGlobalWeightsReader = NullObjectGlobalWeightsReader()
     storage_config: StorageConfig = config.storage
     if storage_config.enable:
-        store = S3Store(storage_config)
+        local_weights_writer = S3LocalWeightsWriter(storage_config)
 
-    internal_participant: InternalParticipant = InternalParticipant(participant, store)
+    internal_participant: InternalParticipant = InternalParticipant(
+        participant, local_weights_writer, global_weights_reader
+    )
 
     coordinator_config: CoordinatorConfig = config.coordinator
     coordinator_url = f"{coordinator_config.host}:{coordinator_config.port}"

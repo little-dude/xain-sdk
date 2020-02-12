@@ -9,7 +9,12 @@ import uuid
 import numpy as np
 from numpy import ndarray
 
-from xain_sdk.store import AbstractStore, NullObjectStore
+from xain_sdk.store import (
+    AbstractGlobalWeightsReader,
+    AbstractLocalWeightsWriter,
+    NullObjectGlobalWeightsReader,
+    NullObjectLocalWeightsWriter,
+)
 
 # Currently, the combination of sphinx_autodoc_typehints and typing.TYPE_CHECKING
 # crashes, see https://github.com/agronholm/sphinx-autodoc-typehints/issues/22.
@@ -270,22 +275,26 @@ class InternalParticipant:
     """Internal representation that encapsulates the user-defined Participant class.
 
     Args:
-        participant: A user provided implementation of a participant.
-        store: A client for a storage service.
+        participant: A user provided implementation of a participant
+
+        local_weights_writer: A client for writing the local weights
+            when the participant finishes a training round
+
+        global_weights_reader: A client for reading the global weights
+            before starting training
+
     """
 
     def __init__(
-        self, participant: Participant, store: AbstractStore = NullObjectStore()
+        self,
+        participant: Participant,
+        local_weights_writer: AbstractLocalWeightsWriter = NullObjectLocalWeightsWriter(),
+        global_weights_reader: AbstractGlobalWeightsReader = NullObjectGlobalWeightsReader(),
     ):
-        """Initialize the internal representation of a participant.
-
-        Args:
-            participant: A user provided implementation of a participant.
-            store: A client for a storage service. Defaults to `NullObjectStore()`.
-        """
 
         self.participant: Participant = participant
-        self.store: AbstractStore = store
+        self.local_weights_writer: AbstractLocalWeightsWriter = local_weights_writer
+        self.global_weights_reader: AbstractGlobalWeightsReader = global_weights_reader
 
     def train_round(
         self, weights: Optional[ndarray], epochs: int, epoch_base: int
@@ -320,6 +329,7 @@ class InternalParticipant:
         return weights, aggregation_data, metrics
 
     def write_weights(self, round: int, weights: ndarray) -> None:
-        """A wrapper for :py:meth:`~xain_sdk.store.AbstractStore.write_weights`."""
-
-        self.store.write_weights(round=round, weights=weights)
+        """A wrapper for :py:meth:`~xain_sdk.store.AbstractLocalWeightsWriter.write_weights`."""
+        self.local_weights_writer.write_weights(
+            self.participant.dummy_id, round, weights
+        )

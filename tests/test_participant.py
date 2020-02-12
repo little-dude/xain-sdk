@@ -173,7 +173,8 @@ def test_get_set_pytorch_weights(  # pylint: disable=redefined-outer-name
 
 
 def test_update_metrics(
-    participant: Participant,  # pylint: disable=redefined-outer-name
+    # pylint: disable=redefined-outer-name
+    participant: Participant,
 ) -> None:
     """Test the metrics updating.
 
@@ -254,7 +255,8 @@ def test_update_metrics(
 
 
 def test_update_metrics_overwrite(
-    participant: Participant,  # pylint: disable=redefined-outer-name
+    # pylint: disable=redefined-outer-name
+    participant: Participant,
 ) -> None:
     """Test the metrics updating with overwriting.
 
